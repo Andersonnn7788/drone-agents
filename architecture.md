@@ -1,6 +1,6 @@
 # Architecture — Drone Swarm Rescue Simulation
 
-Visual architecture reference for the self-healing rescue drone swarm simulation. All diagrams use [Mermaid](https://mermaid.js.org/) syntax and render on GitHub, VS Code (with Mermaid extension), and most modern Markdown previewers.
+Visual architecture for the self-healing rescue drone swarm simulation.
 
 ---
 
