@@ -399,7 +399,7 @@ drone-agents/
 
 ```bash
 # Python (from project root)
-pip install "mcp[cli]" mesa langchain-mcp-adapters langgraph langchain-openai langchain fastapi uvicorn numpy
+pip install "mcp[cli]" mesa langchain-mcp-adapters langgraph langchain-openai langchain fastapi uvicorn numpy python-dotenv
 
 # Frontend
 cd dashboard
@@ -426,22 +426,16 @@ bash scripts/run_all.sh
 
 This starts all 4 services (MCP Server, API Bridge, Agent Runner, Dashboard) and prints their URLs. Press `Ctrl+C` to stop everything.
 
-**Option B: Manual (4 terminals)**
+**Option B: Manual (2 terminals)**
 
 ```bash
-# Terminal 1: MCP Server
-python -m mcp_server.server
-# → http://localhost:8000/mcp
-
-# Terminal 2: API Bridge
-uvicorn api.bridge:app --port 8001 --reload
-# → http://localhost:8001
-
-# Terminal 3: Agent Runner
+# Terminal 1: Backend (starts MCP server + API bridge + agent)
 python -m agent.runner
-# Connects to MCP, starts mission
+# → MCP Server on http://localhost:8000/mcp
+# → API Bridge on http://localhost:8001
+# → Agent connects and starts mission
 
-# Terminal 4: Frontend
+# Terminal 2: Frontend
 cd dashboard && npm run dev
 # → http://localhost:3000
 ```

@@ -7,6 +7,8 @@ import sys
 import threading
 import time
 
+from dotenv import load_dotenv
+
 import httpx
 import uvicorn
 from langchain_mcp_adapters.client import MultiServerMCPClient
@@ -156,6 +158,7 @@ async def run_mission():
 
 def main():
     """CLI entry point."""
+    load_dotenv()
     if not os.environ.get("OPENAI_API_KEY"):
         print("ERROR: OPENAI_API_KEY environment variable is required.")
         print("Set it with: export OPENAI_API_KEY=sk-...")
