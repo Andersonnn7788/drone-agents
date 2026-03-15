@@ -94,66 +94,66 @@ async def run_mission():
 
     # 2. Connect to MCP and load tools
     print("\n[2/4] Connecting to MCP server...")
-    async with MultiServerMCPClient(
+    mcp_client = MultiServerMCPClient(
         {
             "drone_swarm": {
                 "url": "http://localhost:8000/mcp",
                 "transport": "streamable_http",
             }
         }
-    ) as mcp_client:
-        tools = mcp_client.get_tools()
-        print(f"  Loaded {len(tools)} MCP tools")
+    )
+    tools = await mcp_client.get_tools()
+    print(f"  Loaded {len(tools)} MCP tools")
 
-        # 3. Build the LangGraph agent
-        print("\n[3/4] Building agent graph...")
-        graph = build_graph(tools)
+    # 3. Build the LangGraph agent
+    print("\n[3/4] Building agent graph...")
+    graph = build_graph(tools)
 
-        # Log mission start
-        model = get_model()
-        _log_to_model("Mission initiated — LLM Commander online.", msg_type="system", is_critical=True)
+    # Log mission start
+    model = get_model()
+    _log_to_model("Mission initiated — LLM Commander online.", msg_type="system", is_critical=True)
 
-        # 4. Run the mission
-        print("\n[4/4] Starting mission...\n")
-        print("-" * 60)
+    # 4. Run the mission
+    print("\n[4/4] Starting mission...\n")
+    print("-" * 60)
 
-        initial_message = (
-            "Begin search and rescue mission. "
-            "Discover your fleet and plan your approach."
+    initial_message = (
+        "Begin search and rescue mission. "
+        "Discover your fleet and plan your approach."
+    )
+
+    try:
+        result = await graph.ainvoke(
+            {"messages": [("human", initial_message)]},
+            config={"recursion_limit": 200},
         )
 
-        try:
-            result = await graph.ainvoke(
-                {"messages": [("human", initial_message)]},
-                config={"recursion_limit": 200},
-            )
+        # Print final AI message
+        final_msg = result["messages"][-1]
+        if hasattr(final_msg, "content") and final_msg.content:
+            print("\n" + "-" * 60)
+            print("COMMANDER FINAL REPORT:")
+            print(final_msg.content)
 
-            # Print final AI message
-            final_msg = result["messages"][-1]
-            if hasattr(final_msg, "content") and final_msg.content:
-                print("\n" + "-" * 60)
-                print("COMMANDER FINAL REPORT:")
-                print(final_msg.content)
+    except Exception as e:
+        error_name = type(e).__name__
+        print(f"\nMission ended: {error_name}: {e}")
+        _log_to_model(f"Mission ended: {error_name}", msg_type="system", is_critical=True)
 
-        except Exception as e:
-            error_name = type(e).__name__
-            print(f"\nMission ended: {error_name}: {e}")
-            _log_to_model(f"Mission ended: {error_name}", msg_type="system", is_critical=True)
+    # Save logs
+    print("\n" + "=" * 60)
+    model = get_model()
+    state = model.get_state()
+    stats = state["stats"]
+    print(f"  Steps: {model.mission_step}")
+    print(f"  Survivors found: {stats['found']}/{stats['total_survivors']}")
+    print(f"  Survivors rescued: {stats['rescued']}/{stats['total_survivors']}")
+    print(f"  Survivors alive: {stats['alive']}/{stats['total_survivors']}")
+    print(f"  Active drones: {stats['active_drones']}/{stats['total_drones']}")
+    print(f"  Grid coverage: {stats['coverage_pct']}%")
+    print("=" * 60)
 
-        # Save logs
-        print("\n" + "=" * 60)
-        model = get_model()
-        state = model.get_state()
-        stats = state["stats"]
-        print(f"  Steps: {model.mission_step}")
-        print(f"  Survivors found: {stats['found']}/{stats['total_survivors']}")
-        print(f"  Survivors rescued: {stats['rescued']}/{stats['total_survivors']}")
-        print(f"  Survivors alive: {stats['alive']}/{stats['total_survivors']}")
-        print(f"  Active drones: {stats['active_drones']}/{stats['total_drones']}")
-        print(f"  Grid coverage: {stats['coverage_pct']}%")
-        print("=" * 60)
-
-        save_mission_log(model)
+    save_mission_log(model)
 
 
 def main():

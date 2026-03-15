@@ -54,20 +54,28 @@ async def _sse_generator():
     last_step = -1
     last_log_count = 0
     last_disaster_count = 0
+    last_drone_hash = ""
 
     # Send initial state immediately
     model = get_model()
     last_step = model.mission_step
     last_log_count = len(model.agent_logs)
     last_disaster_count = len(model.disaster_events)
+    last_drone_hash = str([(d.drone_id, d.pos) for d in model.drones.values()])
     yield f"event: state\ndata: {json.dumps(model.get_state())}\n\n"
 
     while True:
         await asyncio.sleep(0.5)
         model = get_model()
 
+        # Check for drone position changes (move_to before advance_simulation)
+        drone_hash = str([(d.drone_id, d.pos) for d in model.drones.values()])
+        drone_moved = drone_hash != last_drone_hash
+        if drone_moved:
+            last_drone_hash = drone_hash
+
         # Check for new simulation steps
-        if model.mission_step != last_step:
+        if model.mission_step != last_step or drone_moved:
             last_step = model.mission_step
             yield f"event: state\ndata: {json.dumps(model.get_state())}\n\n"
 

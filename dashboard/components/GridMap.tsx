@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   BlackoutZone,
   DroneState,
@@ -60,17 +60,6 @@ interface GridMapProps {
 
 export default function GridMap({ state, gridEffect }: GridMapProps) {
   // Build O(1) lookup maps from state
-  const dronesByPos = useMemo<Map<string, DroneState[]>>(() => {
-    const map = new Map<string, DroneState[]>();
-    if (!state) return map;
-    for (const drone of Object.values(state.drones)) {
-      const key = `${drone.position[0]},${drone.position[1]}`;
-      const existing = map.get(key) ?? [];
-      map.set(key, [...existing, drone]);
-    }
-    return map;
-  }, [state]);
-
   const survivorsByPos = useMemo<Map<string, SurvivorState[]>>(() => {
     const map = new Map<string, SurvivorState[]>();
     if (!state) return map;
@@ -99,6 +88,21 @@ export default function GridMap({ state, gridEffect }: GridMapProps) {
     prevScannedRef.current = new Set(scannedSet);
     return fresh;
   }, [scannedSet]);
+
+  // Track grid container size for absolute drone positioning
+  const gridRef = useRef<HTMLDivElement>(null);
+  const [gridSize, setGridSize] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    const el = gridRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const { width, height } = entries[0].contentRect;
+      setGridSize({ width, height });
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   // Compute disaster-affected cells for the current step
   const { floodedCells, aftershockCells } = useMemo(() => {
@@ -133,7 +137,6 @@ export default function GridMap({ state, gridEffect }: GridMapProps) {
       const terrain = state.terrain[y]?.[x] ?? 'OPEN';
       const heat = state.heatmap[y]?.[x] ?? 0;
       const posKey = `${x},${y}`;
-      const drones = dronesByPos.get(posKey) ?? [];
       const survivors = survivorsByPos.get(posKey) ?? [];
       const isScanned = scannedSet.has(posKey);
       const inBlackout = isInBlackout(x, y, state.blackout_zones);
@@ -186,23 +189,6 @@ export default function GridMap({ state, gridEffect }: GridMapProps) {
             </div>
           )}
 
-          {/* Drone markers */}
-          {drones.map((d, i) => (
-            <div
-              key={d.drone_id}
-              className={`absolute rounded-full z-10 ${!d.connected ? 'blink' : ''}`}
-              style={{
-                width: 9,
-                height: 9,
-                background: DRONE_COLORS[d.drone_id] ?? '#ffffff',
-                top: 2 + i * 4,
-                left: 2 + i * 4,
-                border: d.is_relay ? '2px solid rgba(255,255,255,0.9)' : '1px solid rgba(0,0,0,0.4)',
-                boxShadow: `0 0 4px ${DRONE_COLORS[d.drone_id] ?? '#fff'}80`,
-              }}
-            />
-          ))}
-
           {/* Survivor indicators */}
           {survivors.map((s, i) => (
             <div
@@ -235,7 +221,8 @@ export default function GridMap({ state, gridEffect }: GridMapProps) {
       </div>
 
       <div
-        className={`flex-1 min-h-0 ${gridEffect === 'aftershock' ? 'aftershock-shake' : ''}`}
+        ref={gridRef}
+        className={`flex-1 min-h-0 relative ${gridEffect === 'aftershock' ? 'aftershock-shake' : ''}`}
         style={{
           display: 'grid',
           gridTemplateColumns: `repeat(${GRID_SIZE}, 1fr)`,
@@ -243,6 +230,34 @@ export default function GridMap({ state, gridEffect }: GridMapProps) {
         }}
       >
         {cells}
+
+        {/* Drone overlays — rendered on top of grid for smooth animation */}
+        {gridSize.width > 0 && Object.values(state.drones).map((d) => {
+          const cellW = gridSize.width / GRID_SIZE;
+          const cellH = gridSize.height / GRID_SIZE;
+          // x maps to left; y is inverted (row 0 = bottom of visual grid)
+          const left = d.position[0] * cellW + 2;
+          const top = (GRID_SIZE - 1 - d.position[1]) * cellH + 2;
+          return (
+            <div
+              key={d.drone_id}
+              className={`pointer-events-none ${!d.connected ? 'blink' : ''}`}
+              style={{
+                position: 'absolute',
+                left,
+                top,
+                width: 9,
+                height: 9,
+                transition: 'left 0.4s ease, top 0.4s ease',
+                background: DRONE_COLORS[d.drone_id] ?? '#ffffff',
+                borderRadius: '50%',
+                border: d.is_relay ? '2px solid rgba(255,255,255,0.9)' : '1px solid rgba(0,0,0,0.4)',
+                boxShadow: `0 0 4px ${DRONE_COLORS[d.drone_id] ?? '#fff'}80`,
+                zIndex: 10,
+              }}
+            />
+          );
+        })}
       </div>
 
       {/* Legend */}
