@@ -45,14 +45,14 @@ interface DronePanelProps {
 export default function DronePanel({ state }: DronePanelProps) {
   if (!state) {
     return (
-      <div className="bg-gray-900 rounded border border-gray-800 p-2 flex items-center justify-center">
+      <div className="flex items-center justify-center h-full">
         <span className="text-gray-600 text-sm">No data</span>
       </div>
     );
   }
 
   return (
-    <div className="bg-gray-900 rounded border border-gray-800 p-2 flex flex-col gap-2 overflow-y-auto min-h-0">
+    <div className="flex flex-col gap-2 overflow-y-auto min-h-0">
       <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex-shrink-0">
         Fleet Status
       </h2>

@@ -30,12 +30,14 @@ function formatTime(ts: number): string {
 
 interface ReasoningLogProps {
   logs: LogEntry[];
+  voiceEnabled?: boolean;
 }
 
-export default function ReasoningLog({ logs }: ReasoningLogProps) {
+export default function ReasoningLog({ logs, voiceEnabled = false }: ReasoningLogProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
+  const prevLogCountRef = useRef(0);
 
   // Auto-scroll to bottom when new logs arrive
   useEffect(() => {
@@ -43,6 +45,27 @@ export default function ReasoningLog({ logs }: ReasoningLogProps) {
       bottomRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [logs, autoScroll]);
+
+  // Voice narration for critical entries
+  useEffect(() => {
+    if (!voiceEnabled || typeof window === 'undefined' || !window.speechSynthesis) return;
+    // Only narrate new entries (not on replay shrink)
+    if (logs.length <= prevLogCountRef.current) {
+      prevLogCountRef.current = logs.length;
+      return;
+    }
+    const newEntries = logs.slice(prevLogCountRef.current);
+    prevLogCountRef.current = logs.length;
+
+    for (const entry of newEntries) {
+      if (entry.is_critical) {
+        const utterance = new SpeechSynthesisUtterance(entry.message);
+        utterance.rate = 1.1;
+        utterance.pitch = 0.9;
+        window.speechSynthesis.speak(utterance);
+      }
+    }
+  }, [logs, voiceEnabled]);
 
   // Detect if user manually scrolled up — pause auto-scroll
   const handleScroll = () => {
@@ -111,6 +134,9 @@ export default function ReasoningLog({ logs }: ReasoningLogProps) {
             >
               {entry.message}
             </span>
+            {voiceEnabled && entry.is_critical && (
+              <span className="ml-1 text-yellow-500" title="Voice narrated">&#128266;</span>
+            )}
           </div>
         ))}
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import {
   BlackoutZone,
   DroneState,
@@ -55,9 +55,10 @@ function isInBlackout(x: number, y: number, zones: BlackoutZone[]): boolean {
 
 interface GridMapProps {
   state: SimState | null;
+  gridEffect?: 'aftershock' | 'water' | null;
 }
 
-export default function GridMap({ state }: GridMapProps) {
+export default function GridMap({ state, gridEffect }: GridMapProps) {
   // Build O(1) lookup maps from state
   const dronesByPos = useMemo<Map<string, DroneState[]>>(() => {
     const map = new Map<string, DroneState[]>();
@@ -85,6 +86,35 @@ export default function GridMap({ state }: GridMapProps) {
   const scannedSet = useMemo<Set<string>>(() => {
     if (!state) return new Set();
     return new Set(state.scanned_cells.map(([x, y]) => `${x},${y}`));
+  }, [state]);
+
+  // Track previously scanned cells for scan-pulse on fresh scans
+  const prevScannedRef = useRef<Set<string>>(new Set());
+  const freshlyScanned = useMemo(() => {
+    const fresh = new Set<string>();
+    for (const key of scannedSet) {
+      if (!prevScannedRef.current.has(key)) fresh.add(key);
+    }
+    // Update ref after computing diff
+    prevScannedRef.current = new Set(scannedSet);
+    return fresh;
+  }, [scannedSet]);
+
+  // Compute disaster-affected cells for the current step
+  const { floodedCells, aftershockCells } = useMemo(() => {
+    const flooded = new Set<string>();
+    const aftershock = new Set<string>();
+    if (!state) return { floodedCells: flooded, aftershockCells: aftershock };
+    for (const evt of state.disaster_events) {
+      if (evt.step !== state.mission_step) continue;
+      if (evt.type === 'rising_water' && evt.flooded_cells) {
+        for (const [x, y] of evt.flooded_cells) flooded.add(`${x},${y}`);
+      }
+      if (evt.type === 'aftershock' && evt.affected_cells) {
+        for (const [x, y] of evt.affected_cells) aftershock.add(`${x},${y}`);
+      }
+    }
+    return { floodedCells: flooded, aftershockCells: aftershock };
   }, [state]);
 
   if (!state) {
@@ -127,6 +157,21 @@ export default function GridMap({ state }: GridMapProps) {
           {/* Scanned overlay */}
           {isScanned && (
             <div className="absolute inset-0 ring-1 ring-inset ring-white/15 bg-white/5 pointer-events-none" />
+          )}
+
+          {/* Scan-pulse on freshly scanned cells */}
+          {freshlyScanned.has(posKey) && (
+            <div className="absolute inset-0 pointer-events-none scan-pulse" style={{ background: 'rgba(34,211,238,0.3)' }} />
+          )}
+
+          {/* Water expansion overlay */}
+          {floodedCells.has(posKey) && (
+            <div className="absolute inset-0 pointer-events-none water-expansion z-20" />
+          )}
+
+          {/* Aftershock cell flash */}
+          {aftershockCells.has(posKey) && (
+            <div className="absolute inset-0 pointer-events-none aftershock-cell-flash z-20" />
           )}
 
           {/* Blackout overlay */}
@@ -190,7 +235,7 @@ export default function GridMap({ state }: GridMapProps) {
       </div>
 
       <div
-        className="flex-1 min-h-0"
+        className={`flex-1 min-h-0 ${gridEffect === 'aftershock' ? 'aftershock-shake' : ''}`}
         style={{
           display: 'grid',
           gridTemplateColumns: `repeat(${GRID_SIZE}, 1fr)`,

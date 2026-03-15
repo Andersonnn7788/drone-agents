@@ -6,6 +6,8 @@ import { SimState } from '@/lib/api';
 interface ControlPanelProps {
   state: SimState | null;
   missionRunning: boolean;
+  voiceEnabled: boolean;
+  onVoiceToggle: () => void;
   onStart: () => void;
   onStep: (steps: number) => void;
   onBlackout: (zone_x: number, zone_y: number, radius: number) => void;
@@ -15,6 +17,8 @@ interface ControlPanelProps {
 export default function ControlPanel({
   state,
   missionRunning,
+  voiceEnabled,
+  onVoiceToggle,
   onStart,
   onStep,
   onBlackout,
@@ -93,6 +97,18 @@ export default function ControlPanel({
           text-gray-200 transition-colors flex-shrink-0"
       >
         +1 Step
+      </button>
+
+      {/* Voice toggle */}
+      <button
+        onClick={onVoiceToggle}
+        className={`w-full py-1.5 text-xs font-medium rounded transition-colors flex-shrink-0 ${
+          voiceEnabled
+            ? 'bg-yellow-800 hover:bg-yellow-700 text-yellow-100'
+            : 'bg-gray-700 hover:bg-gray-600 text-gray-200'
+        }`}
+      >
+        {voiceEnabled ? 'Voice On' : 'Voice Off'}
       </button>
 
       {/* Trigger Blackout toggle */}

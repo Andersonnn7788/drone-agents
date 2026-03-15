@@ -11,6 +11,7 @@ import {
 } from '@/lib/api';
 import GridMap from '@/components/GridMap';
 import DronePanel from '@/components/DronePanel';
+import MeshGraph from '@/components/MeshGraph';
 import ReasoningLog from '@/components/ReasoningLog';
 import ControlPanel from '@/components/ControlPanel';
 import TimelineSlider from '@/components/TimelineSlider';
@@ -23,6 +24,9 @@ export default function Page() {
   const [connected, setConnected] = useState(false);
   const [missionRunning, setMissionRunning] = useState(false);
   const [flashBlackout, setFlashBlackout] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(false);
+  const [rightTab, setRightTab] = useState<'fleet' | 'mesh'>('fleet');
+  const [gridEffect, setGridEffect] = useState<'aftershock' | 'water' | null>(null);
 
   // Keep a ref to the latest simState for use in SSE handlers
   const simStateRef = useRef<SimState | null>(null);
@@ -49,9 +53,17 @@ export default function Page() {
         });
       },
       onLogs: (newLogs) => setLogs((prev) => [...prev, ...newLogs]),
-      onDisaster: () => {
+      onDisaster: (event) => {
         // Re-fetch state on disaster to get updated terrain
         api.getState().then(setSimState).catch(() => {});
+        // Trigger grid effect
+        if (event.type === 'aftershock') {
+          setGridEffect('aftershock');
+          setTimeout(() => setGridEffect(null), 600);
+        } else if (event.type === 'rising_water') {
+          setGridEffect('water');
+          setTimeout(() => setGridEffect(null), 800);
+        }
       },
       onBlackout: () => {
         setFlashBlackout(true);
@@ -149,12 +161,47 @@ export default function Page() {
 
       {/* 4-panel grid */}
       <div className="flex-1 grid grid-cols-[1fr_280px] grid-rows-2 gap-2 min-h-0">
-        <GridMap state={displayState} />
-        <DronePanel state={displayState} />
-        <ReasoningLog logs={displayLogs} />
+        <GridMap state={displayState} gridEffect={gridEffect} />
+
+        {/* Right column top: Fleet / Mesh tabs */}
+        <div className="bg-gray-900 rounded border border-gray-800 p-2 flex flex-col min-h-0">
+          <div className="flex gap-1 mb-2 flex-shrink-0">
+            <button
+              onClick={() => setRightTab('fleet')}
+              className={`flex-1 py-1 text-[10px] font-semibold uppercase tracking-wider rounded transition-colors ${
+                rightTab === 'fleet'
+                  ? 'bg-gray-700 text-cyan-300'
+                  : 'text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              Fleet
+            </button>
+            <button
+              onClick={() => setRightTab('mesh')}
+              className={`flex-1 py-1 text-[10px] font-semibold uppercase tracking-wider rounded transition-colors ${
+                rightTab === 'mesh'
+                  ? 'bg-gray-700 text-cyan-300'
+                  : 'text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              Mesh
+            </button>
+          </div>
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            {rightTab === 'fleet' ? (
+              <DronePanel state={displayState} />
+            ) : (
+              <MeshGraph state={displayState} />
+            )}
+          </div>
+        </div>
+
+        <ReasoningLog logs={displayLogs} voiceEnabled={voiceEnabled} />
         <ControlPanel
           state={displayState}
           missionRunning={missionRunning}
+          voiceEnabled={voiceEnabled}
+          onVoiceToggle={() => setVoiceEnabled((v) => !v)}
           onStart={handleStart}
           onStep={handleStep}
           onBlackout={handleBlackout}

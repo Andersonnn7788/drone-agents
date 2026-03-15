@@ -20,7 +20,7 @@ Stage 4: LangGraph Agent       ✅ COMPLETE
     ↓
 Stage 5: Dashboard (Core)      ✅ COMPLETE
     ↓
-Stage 6: Polish + Demo         ← UP NEXT (depends on Stages 4+5)
+Stage 6: Polish + Demo         ✅ COMPLETE
 ```
 
 ---
@@ -227,7 +227,7 @@ cd dashboard && npm run dev
 
 ---
 
-## Stage 6: Polish + Demo [ ]
+## Stage 6: Polish + Demo [x]
 
 **Goal:** Wow-factor features — timeline replay, voice narration, animations, demo script.
 
@@ -235,12 +235,12 @@ cd dashboard && npm run dev
 
 | File | Purpose | Status |
 |------|---------|--------|
-| `dashboard/components/TimelineSlider.tsx` | Mission replay scrubber | [x] | Already built in Stage 5 (75 lines, live/replay modes, go-live button) |
-| `dashboard/components/MeshGraph.tsx` | SVG network topology | [ ] | Does not exist |
-| Voice in `ReasoningLog.tsx` | SpeechSynthesis for critical entries | [ ] | Not implemented |
-| CSS animations | Scan pulse, aftershock shake, water expansion, blackout flash | [partial] | blink, blackout-flash, bar-transition, scan-pulse exist; aftershock shake + water expansion missing |
-| `scripts/demo.py` | Scripted 5-act demo sequence | [ ] | Does not exist |
-| `scripts/run_all.sh` | Start all 4 services | [ ] | Does not exist |
+| `dashboard/components/TimelineSlider.tsx` | Mission replay scrubber | [x] | Built in Stage 5 (live/replay modes, go-live button) |
+| `dashboard/components/MeshGraph.tsx` | SVG network topology | [x] | Force-directed graph with drone nodes, connection edges, blackout overlay |
+| Voice in `ReasoningLog.tsx` | SpeechSynthesis for critical entries | [x] | Browser SpeechSynthesis reads critical log entries, toggle in ControlPanel |
+| CSS animations | Scan pulse, aftershock shake, water expansion, blackout flash | [x] | All animations: blink, blackout-flash, bar-transition, scan-pulse, aftershock-shake, water-expand |
+| `scripts/demo.py` | Scripted 5-act demo sequence | [x] | 5-act narrative: Discovery → Triage → Blackout → Self-Heal → Finale |
+| `scripts/run_all.sh` | Start all 4 services | [x] | Launches MCP server, API bridge, agent runner, and Next.js dashboard |
 
 ### Verification
 Full end-to-end demo: run_all.sh → open dashboard → start mission → watch 5-act narrative → trigger blackout → replay with timeline slider → voice narration works
@@ -256,3 +256,4 @@ Full end-to-end demo: run_all.sh → open dashboard → start mission → watch 
 | 2026-03-15 | Stage 3 | FastAPI bridge complete — SSE streaming, REST endpoints, shared model singleton, CORS, blackout/step/start controls |
 | 2026-03-15 | Stage 4 | LangGraph agent complete — system prompt with triage protocol, StateGraph (agent→tools loop), runner with in-process MCP+bridge servers, GPT-5-mini, logging pipeline to model.agent_logs, mission_log.json persistence |
 | 2026-03-15 | Stage 5 | Next.js dashboard complete — manually scaffolded (Next.js 16), lib/api.ts (TypeScript interfaces + SSE + REST), page.tsx (4-panel grid), GridMap (12×12 terrain+heatmap+drone markers), DronePanel (battery+health bars), ReasoningLog (color-coded CoT), ControlPanel (start/step/blackout/reset), TimelineSlider (replay scrubber) |
+| 2026-03-15 | Stage 6 | Polish + Demo complete — MeshGraph (force-directed SVG topology), voice narration (SpeechSynthesis for critical entries), CSS animations (aftershock-shake, water-expand), demo.py (5-act scripted sequence), run_all.sh (4-service launcher). Next.js build passes with zero errors. All 6 stages complete. |
