@@ -18,9 +18,9 @@ Stage 3: FastAPI Bridge        ✅ COMPLETE
     ↓
 Stage 4: LangGraph Agent       ✅ COMPLETE
     ↓
-Stage 5: Dashboard (Core)      ← UP NEXT (depends on Stage 3)
+Stage 5: Dashboard (Core)      ✅ COMPLETE
     ↓
-Stage 6: Polish + Demo         ← depends on Stages 4+5
+Stage 6: Polish + Demo         ← UP NEXT (depends on Stages 4+5)
 ```
 
 ---
@@ -200,7 +200,7 @@ python -m agent.runner
 
 ---
 
-## Stage 5: Next.js Dashboard (Core) [ ]
+## Stage 5: Next.js Dashboard (Core) [x]
 
 **Goal:** Real-time dashboard visualizing simulation via SSE from the API bridge.
 
@@ -208,14 +208,15 @@ python -m agent.runner
 
 | File | Purpose | Status |
 |------|---------|--------|
-| `dashboard/` | Next.js scaffold (create-next-app) | [ ] |
-| `dashboard/lib/api.ts` | SSE client + REST helpers + TypeScript interfaces | [ ] |
-| `dashboard/app/page.tsx` | 4-panel CSS Grid layout | [ ] |
-| `dashboard/app/layout.tsx` | Dark theme layout | [ ] |
-| `dashboard/components/GridMap.tsx` | 12x12 grid with terrain, heatmap, drones, survivors | [ ] |
-| `dashboard/components/DronePanel.tsx` | Battery bars, status, survivor health bars | [ ] |
-| `dashboard/components/ReasoningLog.tsx` | Color-coded scrolling CoT log | [ ] |
-| `dashboard/components/ControlPanel.tsx` | Start, blackout, step, voice toggle, reset | [ ] |
+| `dashboard/` | Next.js scaffold (manual, Next.js 16) | [x] |
+| `dashboard/lib/api.ts` | SSE client + REST helpers + TypeScript interfaces | [x] |
+| `dashboard/app/page.tsx` | 4-panel CSS Grid layout | [x] |
+| `dashboard/app/layout.tsx` | Dark theme layout | [x] |
+| `dashboard/components/GridMap.tsx` | 12x12 grid with terrain, heatmap, drones, survivors | [x] |
+| `dashboard/components/DronePanel.tsx` | Battery bars, status, survivor health bars | [x] |
+| `dashboard/components/ReasoningLog.tsx` | Color-coded scrolling CoT log | [x] |
+| `dashboard/components/ControlPanel.tsx` | Start, blackout, step, reset | [x] |
+| `dashboard/components/TimelineSlider.tsx` | Mission replay scrubber | [x] |
 
 ### Verification
 ```bash
@@ -234,12 +235,12 @@ cd dashboard && npm run dev
 
 | File | Purpose | Status |
 |------|---------|--------|
-| `dashboard/components/TimelineSlider.tsx` | Mission replay scrubber | [ ] |
-| `dashboard/components/MeshGraph.tsx` | SVG network topology | [ ] |
-| Voice in `ReasoningLog.tsx` | SpeechSynthesis for critical entries | [ ] |
-| CSS animations | Scan pulse, aftershock shake, water expansion, blackout flash | [ ] |
-| `scripts/demo.py` | Scripted 5-act demo sequence | [ ] |
-| `scripts/run_all.sh` | Start all 4 services | [ ] |
+| `dashboard/components/TimelineSlider.tsx` | Mission replay scrubber | [x] | Already built in Stage 5 (75 lines, live/replay modes, go-live button) |
+| `dashboard/components/MeshGraph.tsx` | SVG network topology | [ ] | Does not exist |
+| Voice in `ReasoningLog.tsx` | SpeechSynthesis for critical entries | [ ] | Not implemented |
+| CSS animations | Scan pulse, aftershock shake, water expansion, blackout flash | [partial] | blink, blackout-flash, bar-transition, scan-pulse exist; aftershock shake + water expansion missing |
+| `scripts/demo.py` | Scripted 5-act demo sequence | [ ] | Does not exist |
+| `scripts/run_all.sh` | Start all 4 services | [ ] | Does not exist |
 
 ### Verification
 Full end-to-end demo: run_all.sh → open dashboard → start mission → watch 5-act narrative → trigger blackout → replay with timeline slider → voice narration works
@@ -254,3 +255,4 @@ Full end-to-end demo: run_all.sh → open dashboard → start mission → watch 
 | 2026-03-15 | Stage 2 | MCP server complete — 17 tools (11 core + 6 innovation) exposed via FastMCP on Streamable HTTP |
 | 2026-03-15 | Stage 3 | FastAPI bridge complete — SSE streaming, REST endpoints, shared model singleton, CORS, blackout/step/start controls |
 | 2026-03-15 | Stage 4 | LangGraph agent complete — system prompt with triage protocol, StateGraph (agent→tools loop), runner with in-process MCP+bridge servers, GPT-5-mini, logging pipeline to model.agent_logs, mission_log.json persistence |
+| 2026-03-15 | Stage 5 | Next.js dashboard complete — manually scaffolded (Next.js 16), lib/api.ts (TypeScript interfaces + SSE + REST), page.tsx (4-panel grid), GridMap (12×12 terrain+heatmap+drone markers), DronePanel (battery+health bars), ReasoningLog (color-coded CoT), ControlPanel (start/step/blackout/reset), TimelineSlider (replay scrubber) |
