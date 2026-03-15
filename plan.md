@@ -16,9 +16,9 @@ Stage 2: MCP Server            ✅ COMPLETE
     ↓  (can parallel with Stage 3)
 Stage 3: FastAPI Bridge        ✅ COMPLETE
     ↓
-Stage 4: LangGraph Agent       ← UP NEXT (depends on Stage 2)
+Stage 4: LangGraph Agent       ✅ COMPLETE
     ↓
-Stage 5: Dashboard (Core)      ← depends on Stage 3
+Stage 5: Dashboard (Core)      ← UP NEXT (depends on Stage 3)
     ↓
 Stage 6: Polish + Demo         ← depends on Stages 4+5
 ```
@@ -172,7 +172,7 @@ curl -N http://localhost:8001/api/stream  # SSE events
 
 ---
 
-## Stage 4: LangGraph Agent [ ]
+## Stage 4: LangGraph Agent [x]
 
 **Goal:** LLM command agent that connects to MCP, discovers drones, runs search-and-rescue with chain-of-thought triage reasoning.
 
@@ -180,11 +180,11 @@ curl -N http://localhost:8001/api/stream  # SSE events
 
 | File | Purpose | Status |
 |------|---------|--------|
-| `agent/__init__.py` | Package marker | [ ] |
-| `agent/prompts.py` | System prompt with triage protocol | [ ] |
-| `agent/graph.py` | LangGraph StateGraph (MessagesState) | [ ] |
-| `agent/runner.py` | Entry point: MCP client → agent loop | [ ] |
-| `logs/mission_log.json` | Persisted reasoning + tool calls | [ ] |
+| `agent/__init__.py` | Package marker | [x] |
+| `agent/prompts.py` | System prompt with triage protocol | [x] |
+| `agent/graph.py` | LangGraph StateGraph (MessagesState) | [x] |
+| `agent/runner.py` | Entry point: MCP client → agent loop | [x] |
+| `logs/mission_log.json` | Persisted reasoning + tool calls | [x] |
 
 ### Architecture
 - StateGraph: START → agent → tools_condition → tools → agent (loop) → END
@@ -253,3 +253,4 @@ Full end-to-end demo: run_all.sh → open dashboard → start mission → watch 
 | 2026-03-15 | Stage 1 | Simulation engine complete — DisasterModel, DroneAgent, SurvivorAgent, mesh network, pheromones, terrain, heatmap, dynamic disasters |
 | 2026-03-15 | Stage 2 | MCP server complete — 17 tools (11 core + 6 innovation) exposed via FastMCP on Streamable HTTP |
 | 2026-03-15 | Stage 3 | FastAPI bridge complete — SSE streaming, REST endpoints, shared model singleton, CORS, blackout/step/start controls |
+| 2026-03-15 | Stage 4 | LangGraph agent complete — system prompt with triage protocol, StateGraph (agent→tools loop), runner with in-process MCP+bridge servers, GPT-5-mini, logging pipeline to model.agent_logs, mission_log.json persistence |

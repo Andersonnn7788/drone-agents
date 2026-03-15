@@ -4,7 +4,12 @@
       "Bash(find:*)",
       "Bash(python:*)",
       "Bash(pip install:*)",
-      "Bash(pip show:*)"
+      "Bash(pip show:*)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:pypi.org)",
+      "WebFetch(domain:reference.langchain.com)",
+      "WebFetch(domain:docs.langchain.com)"
     ]
   }
 }

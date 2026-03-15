@@ -1,0 +1,31 @@
+{
+  "mission_steps": 0,
+  "stats": {
+    "total_survivors": 8,
+    "found": 0,
+    "alive": 8,
+    "rescued": 0,
+    "active_drones": 4,
+    "total_drones": 4,
+    "cells_scanned": 0,
+    "total_cells": 144,
+    "coverage_pct": 0.0
+  },
+  "logs": [
+    {
+      "step": 0,
+      "timestamp": 1773572413.611146,
+      "message": "Test log entry",
+      "is_critical": false,
+      "type": "system"
+    },
+    {
+      "step": 0,
+      "timestamp": 1773572413.611146,
+      "message": "CRITICAL survivor found - IMMEDIATE rescue needed",
+      "is_critical": true,
+      "type": "triage"
+    }
+  ],
+  "disaster_events": []
+}
