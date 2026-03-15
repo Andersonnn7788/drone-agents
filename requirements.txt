@@ -1,0 +1,9 @@
+mesa>=3.0
+numpy
+fastapi
+uvicorn[standard]
+mcp[cli]
+langchain
+langchain-openai
+langchain-mcp-adapters
+langgraph
