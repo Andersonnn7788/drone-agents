@@ -103,13 +103,13 @@ flowchart TB
     end
 
     subgraph MCP_Layer["MCP Protocol Layer"]
-        TC["MCP Tool Calls\n(Streamable HTTP)"]
+        TC["MCP Tool Calls<br>(Streamable HTTP)"]
     end
 
     subgraph Tier2["Tier 2 — Drone Local Autonomy (Tactical)"]
         CS[Continue Scanning Sector]
-        AR["Auto-Return\n(battery < 15%)"]
-        PG["Pheromone Gradient\nNavigation"]
+        AR["Auto-Return<br>(battery < 15%)"]
+        PG["Pheromone Gradient<br>Navigation"]
         MR[Mesh Relay Attempt]
         BF[Buffer Findings]
     end
@@ -126,10 +126,10 @@ flowchart TB
     TC --> MR
     TC --> BF
 
-    BLACKOUT["Communication\nBlackout"] -.->|"severs link"| TC
+    BLACKOUT["Communication<br>Blackout"] -.->|"severs link"| TC
     BLACKOUT -.->|"activates"| Tier2
 
-    PG -->|"score = survivor_nearby\n- 0.5*scanned\n- 2.0*danger"| NAV[Navigation Decision]
+    PG -->|"score = survivor_nearby<br>- 0.5*scanned<br>- 2.0*danger"| NAV[Navigation Decision]
 ```
 
 ### Mission Step Lifecycle
@@ -171,27 +171,27 @@ flowchart TB
     subgraph Layers["Three Pheromone PropertyLayers"]
         subgraph Scanned["scanned (repulsive)"]
             S_DEP["Deposit: drone completes scan"]
-            S_EFF["Effect: -0.5 weight\n(drones avoid re-scanning)"]
+            S_EFF["Effect: -0.5 weight<br>(drones avoid re-scanning)"]
         end
         subgraph Survivor["survivor_nearby (attractive)"]
-            SN_DEP["Deposit: survivor detected\n(boosts cell + neighbors)"]
-            SN_EFF["Effect: +1.0 weight\n(drones converge)"]
+            SN_DEP["Deposit: survivor detected<br>(boosts cell + neighbors)"]
+            SN_EFF["Effect: +1.0 weight<br>(drones converge)"]
         end
         subgraph Danger["danger (strongly repulsive)"]
-            D_DEP["Deposit: aftershock or\nrising water event"]
-            D_EFF["Effect: -2.0 weight\n(drones strongly avoid)"]
+            D_DEP["Deposit: aftershock or<br>rising water event"]
+            D_EFF["Effect: -2.0 weight<br>(drones strongly avoid)"]
         end
     end
 
-    DECAY["Global Decay\n0.9x per step\n(all three layers)"]
+    DECAY["Global Decay<br>0.9x per step<br>(all three layers)"]
 
     Scanned --> DECAY
     Survivor --> DECAY
     Danger --> DECAY
 
     subgraph Navigation["Drone Navigation Score"]
-        FORMULA["score = survivor_nearby\n        - 0.5 * scanned\n        - 2.0 * danger"]
-        BEST["Move to neighbor\nwith highest score"]
+        FORMULA["score = survivor_nearby<br>        - 0.5 * scanned<br>        - 2.0 * danger"]
+        BEST["Move to neighbor<br>with highest score"]
     end
 
     S_EFF --> FORMULA
@@ -199,7 +199,7 @@ flowchart TB
     D_EFF --> FORMULA
     FORMULA --> BEST
 
-    NOTE["Works during blackouts\nNo LLM involvement needed"]
+    NOTE["Works during blackouts<br>No LLM involvement needed"]
     BEST --- NOTE
 ```
 
@@ -207,18 +207,18 @@ flowchart TB
 
 ```mermaid
 flowchart TB
-    START["Multiple Survivors\nDetected"] --> CHECK_CRIT{"Severity?"}
+    START["Multiple Survivors<br>Detected"] --> CHECK_CRIT{"Severity?"}
 
     CHECK_CRIT -->|"CRITICAL"| CRIT_HEALTH{"Health level?"}
     CHECK_CRIT -->|"MODERATE"| MOD_HEALTH{"Health < 40%?"}
-    CHECK_CRIT -->|"STABLE"| STABLE["Priority: LOW\n(health drain: 0.01/step\n~100 steps to expire)"]
+    CHECK_CRIT -->|"STABLE"| STABLE["Priority: LOW<br>(health drain: 0.01/step<br>~100 steps to expire)"]
 
-    CRIT_HEALTH -->|"< 30%"| P1["Priority: IMMEDIATE\nRespond this step\n(health drain: 0.05/step\n~20 steps to expire)"]
-    CRIT_HEALTH -->|"30% - 60%"| P2["Priority: HIGH\nRespond within 2-3 steps"]
-    CRIT_HEALTH -->|"> 60%"| P2B["Priority: HIGH\nMonitor closely"]
+    CRIT_HEALTH -->|"< 30%"| P1["Priority: IMMEDIATE<br>Respond this step<br>(health drain: 0.05/step<br>~20 steps to expire)"]
+    CRIT_HEALTH -->|"30% - 60%"| P2["Priority: HIGH<br>Respond within 2-3 steps"]
+    CRIT_HEALTH -->|"> 60%"| P2B["Priority: HIGH<br>Monitor closely"]
 
-    MOD_HEALTH -->|"Yes"| P3["Priority: MEDIUM-HIGH\n(health drain: 0.02/step\n~50 steps to expire)"]
-    MOD_HEALTH -->|"No"| P4["Priority: MEDIUM\nSchedule when available"]
+    MOD_HEALTH -->|"Yes"| P3["Priority: MEDIUM-HIGH<br>(health drain: 0.02/step<br>~50 steps to expire)"]
+    MOD_HEALTH -->|"No"| P4["Priority: MEDIUM<br>Schedule when available"]
 
     P1 --> TIEBREAK
     P2 --> TIEBREAK
@@ -227,41 +227,41 @@ flowchart TB
     P4 --> TIEBREAK
     STABLE --> TIEBREAK
 
-    TIEBREAK{"Equal urgency\ntie-break?"} -->|"Yes"| CLOSEST["Assign drone\nclosest to survivor"]
-    TIEBREAK -->|"No"| ASSIGN["Assign by\npriority rank"]
+    TIEBREAK{"Equal urgency<br>tie-break?"} -->|"Yes"| CLOSEST["Assign drone<br>closest to survivor"]
+    TIEBREAK -->|"No"| ASSIGN["Assign by<br>priority rank"]
 
-    CLOSEST --> DISPATCH["Dispatch Drone\nvia move_to()"]
+    CLOSEST --> DISPATCH["Dispatch Drone<br>via move_to()"]
     ASSIGN --> DISPATCH
 
-    DISPATCH --> DIGITAL_TWIN["simulate_mission()\nVerify: battery sufficient?\nCan return to base?"]
+    DISPATCH --> DIGITAL_TWIN["simulate_mission()<br>Verify: battery sufficient?<br>Can return to base?"]
     DIGITAL_TWIN -->|"feasible"| EXECUTE["Execute Mission"]
-    DIGITAL_TWIN -->|"not feasible"| REASSIGN["Reassign to\ncloser drone or\ndefer rescue"]
+    DIGITAL_TWIN -->|"not feasible"| REASSIGN["Reassign to<br>closer drone or<br>defer rescue"]
 ```
 
 ### Mesh Network & Self-Healing
 
 ```mermaid
 flowchart TB
-    NORMAL["Normal Operation\nDrones connected\ncomm_range = 4 (Manhattan)"] -->|"blackout triggered"| BLACKOUT
+    NORMAL["Normal Operation<br>Drones connected<br>comm_range = 4 (Manhattan)"] -->|"blackout triggered"| BLACKOUT
 
     subgraph BLACKOUT["Blackout Zone"]
-        DISC["Drones in zone:\nconnected = False"]
-        AUTO["Activate Autonomous Mode\n• Continue sector scan\n• Follow pheromone gradients\n• Auto-return if battery < 15%"]
-        BUFF["Buffer findings locally\n(findings_buffer)"]
+        DISC["Drones in zone:<br>connected = False"]
+        AUTO["Activate Autonomous Mode<br>• Continue sector scan<br>• Follow pheromone gradients<br>• Auto-return if battery < 15%"]
+        BUFF["Buffer findings locally<br>(findings_buffer)"]
     end
 
     DISC --> AUTO
     AUTO --> BUFF
 
-    BUFF -->|"Agent deploys relay"| RELAY["deploy_as_relay()\nLow-battery drone becomes\nstationary relay (range = 6)"]
+    BUFF -->|"Agent deploys relay"| RELAY["deploy_as_relay()<br>Low-battery drone becomes<br>stationary relay (range = 6)"]
 
-    RELAY --> RECOMPUTE["Topology Recomputation\nDetect restored relay paths"]
+    RELAY --> RECOMPUTE["Topology Recomputation<br>Detect restored relay paths"]
 
-    RECOMPUTE -->|"path found"| SYNC["sync_findings()\nFlush buffered data\nto command"]
+    RECOMPUTE -->|"path found"| SYNC["sync_findings()<br>Flush buffered data<br>to command"]
 
     RECOMPUTE -->|"still isolated"| BUFF
 
-    SYNC --> RECOVERED["Connected State Restored\nAgent receives buffered\nsurvivor/scan data"]
+    SYNC --> RECOVERED["Connected State Restored<br>Agent receives buffered<br>survivor/scan data"]
 
     subgraph Resilience["Network Resilience Analysis"]
         R1[Connectivity ratio]
