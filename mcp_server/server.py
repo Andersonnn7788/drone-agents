@@ -190,6 +190,29 @@ def advance_simulation(steps: int = 1) -> dict:
     }
 
 
+@mcp.tool()
+def rescue_survivor(drone_id: str, survivor_id: int) -> dict:
+    """Rescue a survivor at the drone's current position.
+    The drone must be on the same cell as the survivor. The survivor must be
+    found (scanned), alive, and not already rescued. Marks the survivor as rescued
+    so their health stops draining. Call this AFTER moving to a found survivor's cell."""
+    model = get_model()
+    drone, err = _get_drone(drone_id)
+    if err:
+        return err
+
+    # Find the survivor
+    target = None
+    for s in model.survivors:
+        if s.unique_id == survivor_id:
+            target = s
+            break
+    if target is None:
+        return {"error": f"Unknown survivor_id {survivor_id}. Check discovered survivors first."}
+
+    return drone.rescue_survivor(target)
+
+
 # ── Innovation Tools (6) ──────────────────────────────────────────────
 
 @mcp.tool()

@@ -45,10 +45,22 @@
   width: 4px;
 }
 .log-scroll::-webkit-scrollbar-track {
-  background: #111827;
+  background: #f1f5f9;
 }
 .log-scroll::-webkit-scrollbar-thumb {
-  background: #374151;
+  background: #cbd5e1;
+  border-radius: 2px;
+}
+
+/* Scrollbar styling for fleet/drone panel */
+.panel-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.panel-scroll::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+.panel-scroll::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
   border-radius: 2px;
 }
 

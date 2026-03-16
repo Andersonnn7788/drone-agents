@@ -10,6 +10,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from simulation.state import get_model, reset_model
+from agent.shared import get_start_trigger, is_mission_complete
 
 app = FastAPI(title="Drone Swarm API Bridge")
 
@@ -28,7 +29,6 @@ app.add_middleware(
 
 model_lock = threading.Lock()
 mission_running = False
-_background_task: asyncio.Task | None = None
 
 
 # ── Request models ─────────────────────────────────────────────────────
@@ -51,6 +51,7 @@ class ResetRequest(BaseModel):
 
 async def _sse_generator():
     """Yield SSE events when simulation state changes."""
+    global mission_running
     last_step = -1
     last_log_count = 0
     last_disaster_count = 0
@@ -65,7 +66,7 @@ async def _sse_generator():
     yield f"event: state\ndata: {json.dumps(model.get_state())}\n\n"
 
     while True:
-        await asyncio.sleep(0.5)
+        await asyncio.sleep(0.15)
         model = get_model()
 
         # Check for drone position changes (move_to before advance_simulation)
@@ -94,6 +95,19 @@ async def _sse_generator():
             for event in new_events:
                 event_type = "blackout" if event.get("type") == "blackout" else "disaster"
                 yield f"event: {event_type}\ndata: {json.dumps(event)}\n\n"
+
+        # Check for mission completion
+        if mission_running and is_mission_complete():
+            mission_running = False
+            state = model.get_state()
+            completion_data = {
+                "mission_step": model.mission_step,
+                "stats": state["stats"],
+                "disaster_event_count": len(model.disaster_events),
+                "status": "completed",
+            }
+            yield f"event: mission_complete\ndata: {json.dumps(completion_data)}\n\n"
+            break
 
 
 @app.get("/api/stream")
@@ -146,6 +160,9 @@ async def get_mesh():
 @app.get("/api/health")
 async def health():
     """Health check with mission status."""
+    global mission_running
+    if mission_running and is_mission_complete():
+        mission_running = False
     model = get_model()
     return {
         "status": "ok",
@@ -182,30 +199,26 @@ async def blackout(req: BlackoutRequest):
 
 @app.post("/api/start")
 async def start_mission():
-    """Start auto-stepping the simulation (placeholder until LangGraph agent)."""
-    global mission_running, _background_task
+    """Signal the LangGraph agent runner to begin the mission."""
+    global mission_running
 
     if mission_running:
         return {"status": "already_running", "mission_step": get_model().mission_step}
 
+    event = get_start_trigger()
+    if event is None:
+        return {"status": "error", "message": "Agent runner not ready yet"}
+
     mission_running = True
-    _background_task = asyncio.create_task(_auto_step_loop())
+    event.set()
     return {"status": "started", "mission_step": get_model().mission_step}
 
 
 @app.post("/api/reset")
 async def reset(req: ResetRequest):
     """Reset simulation to a fresh state."""
-    global mission_running, _background_task
-
+    global mission_running
     mission_running = False
-    if _background_task and not _background_task.done():
-        _background_task.cancel()
-        try:
-            await _background_task
-        except asyncio.CancelledError:
-            pass
-    _background_task = None
 
     with model_lock:
         model = reset_model(req.seed)
@@ -214,20 +227,3 @@ async def reset(req: ResetRequest):
         "seed": req.seed,
         "mission_step": model.mission_step,
     }
-
-
-# ── Background auto-step loop ─────────────────────────────────────────
-
-async def _auto_step_loop():
-    """Placeholder: auto-advance simulation until mission ends or 50 steps."""
-    global mission_running
-    try:
-        while mission_running:
-            model = get_model()
-            if model.mission_step >= 50:
-                break
-            with model_lock:
-                model.step()
-            await asyncio.sleep(2.0)
-    finally:
-        mission_running = False

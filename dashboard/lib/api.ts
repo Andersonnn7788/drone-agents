@@ -71,6 +71,13 @@ export interface MissionStats {
   coverage_pct: number;
 }
 
+export interface MissionCompleteData {
+  mission_step: number;
+  stats: MissionStats;
+  disaster_event_count: number;
+  status: string;
+}
+
 export interface SimState {
   mission_step: number;
   terrain: TerrainType[][];
@@ -110,6 +117,7 @@ export interface SSEHandlers {
   onLogs: (logs: LogEntry[]) => void;
   onDisaster: (event: DisasterEvent) => void;
   onBlackout: (event: DisasterEvent) => void;
+  onMissionComplete: (data: MissionCompleteData) => void;
 }
 
 export function connectSSE(handlers: SSEHandlers): EventSource {
@@ -142,6 +150,14 @@ export function connectSSE(handlers: SSEHandlers): EventSource {
   es.addEventListener('blackout', (e) => {
     try {
       handlers.onBlackout(JSON.parse((e as MessageEvent).data));
+    } catch {
+      // ignore
+    }
+  });
+
+  es.addEventListener('mission_complete', (e) => {
+    try {
+      handlers.onMissionComplete(JSON.parse((e as MessageEvent).data));
     } catch {
       // ignore
     }

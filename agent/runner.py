@@ -12,8 +12,10 @@ from dotenv import load_dotenv
 import httpx
 import uvicorn
 from langchain_mcp_adapters.client import MultiServerMCPClient
+from langchain_mcp_adapters.tools import load_mcp_tools
 
 from simulation.state import get_model
+from agent.shared import set_start_trigger, set_mission_complete
 from .graph import build_graph, _log_to_model
 
 
@@ -77,44 +79,24 @@ def save_mission_log(model):
 
 # ── Main mission runner ──────────────────────────────────────────────
 
-async def run_mission():
-    """Start servers, connect MCP, build agent graph, and run the mission."""
-    print("=" * 60)
-    print("  DRONE SWARM RESCUE — Mission Control")
-    print("=" * 60)
-
-    # 1. Start MCP server + API bridge in background threads
-    print("\n[1/4] Starting servers...")
-    start_mcp_server()
-    start_api_bridge()
-
-    # Wait for both to be ready
-    await wait_for_server("http://localhost:8000/mcp", "MCP Server")
-    await wait_for_server("http://localhost:8001/api/health", "API Bridge")
-
-    # 2. Connect to MCP and load tools
-    print("\n[2/4] Connecting to MCP server...")
-    mcp_client = MultiServerMCPClient(
-        {
-            "drone_swarm": {
-                "url": "http://localhost:8000/mcp",
-                "transport": "streamable_http",
-            }
-        }
-    )
-    tools = await mcp_client.get_tools()
-    print(f"  Loaded {len(tools)} MCP tools")
-
+async def _execute_mission(tools):
+    """Build agent graph and run the mission with the given MCP tools."""
     # 3. Build the LangGraph agent
     print("\n[3/4] Building agent graph...")
     graph = build_graph(tools)
+
+    # Wait for dashboard "Start Mission" button
+    start_event = threading.Event()
+    set_start_trigger(start_event)
+    print("\n[4/5] Waiting for Start Mission from dashboard (http://localhost:3000)...")
+    await asyncio.to_thread(start_event.wait)
 
     # Log mission start
     model = get_model()
     _log_to_model("Mission initiated — LLM Commander online.", msg_type="system", is_critical=True)
 
-    # 4. Run the mission
-    print("\n[4/4] Starting mission...\n")
+    # 5. Run the mission
+    print("\n[5/5] Starting mission...\n")
     print("-" * 60)
 
     initial_message = (
@@ -140,6 +122,9 @@ async def run_mission():
         print(f"\nMission ended: {error_name}: {e}")
         _log_to_model(f"Mission ended: {error_name}", msg_type="system", is_critical=True)
 
+    # Mark mission complete
+    set_mission_complete(True)
+
     # Save logs
     print("\n" + "=" * 60)
     model = get_model()
@@ -154,6 +139,53 @@ async def run_mission():
     print("=" * 60)
 
     save_mission_log(model)
+
+
+async def run_mission():
+    """Start servers, connect MCP, build agent graph, and run the mission."""
+    print("=" * 60)
+    print("  DRONE SWARM RESCUE — Mission Control")
+    print("=" * 60)
+
+    # Suppress Windows ProactorEventLoop cleanup errors
+    if sys.platform == "win32":
+        loop = asyncio.get_running_loop()
+        _orig_handler = loop.get_exception_handler()
+
+        def _suppress_proactor_err(loop, context):
+            if "_ProactorBasePipeTransport" in context.get("message", ""):
+                return  # Harmless shutdown noise
+            if _orig_handler:
+                _orig_handler(loop, context)
+            else:
+                loop.default_exception_handler(context)
+
+        loop.set_exception_handler(_suppress_proactor_err)
+
+    # 1. Start MCP server + API bridge in background threads
+    print("\n[1/4] Starting servers...")
+    start_mcp_server()
+    start_api_bridge()
+
+    # Wait for both to be ready
+    await wait_for_server("http://localhost:8000/mcp", "MCP Server")
+    await wait_for_server("http://localhost:8001/api/health", "API Bridge")
+
+    # 2. Connect to MCP and load tools via persistent session
+    print("\n[2/4] Connecting to MCP server...")
+    mcp_client = MultiServerMCPClient(
+        {
+            "drone_swarm": {
+                "url": "http://localhost:8000/mcp",
+                "transport": "streamable_http",
+            }
+        }
+    )
+
+    async with mcp_client.session("drone_swarm") as session:
+        tools = await load_mcp_tools(session)
+        print(f"  Loaded {len(tools)} MCP tools")
+        await _execute_mission(tools)
 
 
 def main():

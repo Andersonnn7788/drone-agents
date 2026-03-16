@@ -118,6 +118,34 @@ class DroneAgent(mesa.Agent):
 
         return result
 
+    def rescue_survivor(self, survivor):
+        """Mark a survivor as rescued. Drone must be on the same cell."""
+        if self.status in ("dead", "relay"):
+            return {"success": False, "reason": f"drone is {self.status}"}
+        if not isinstance(survivor, SurvivorAgent):
+            return {"success": False, "reason": "invalid survivor"}
+        if not survivor.found:
+            return {"success": False, "reason": "survivor not yet found — scan first"}
+        if not survivor.alive:
+            return {"success": False, "reason": "survivor is already dead"}
+        if survivor.rescued:
+            return {"success": False, "reason": "survivor already rescued"}
+        if self.pos != survivor.pos:
+            return {
+                "success": False,
+                "reason": f"drone at {list(self.pos)}, survivor at {list(survivor.pos)} — must be same cell",
+            }
+
+        survivor.rescued = True
+        return {
+            "success": True,
+            "drone_id": self.drone_id,
+            "survivor_id": survivor.unique_id,
+            "severity": survivor.severity,
+            "health": round(survivor.health, 2),
+            "position": list(self.pos),
+        }
+
     def return_to_base(self):
         """Set drone to return-to-base mode."""
         if self.status in ("dead", "relay"):
@@ -202,7 +230,8 @@ class DroneAgent(mesa.Agent):
         if self.pos != (0, 0):
             self.status = "returning"
             return
-        self.battery = min(100, self.battery + 10)
+        charge_rate = 15 if getattr(self.model, "demo_mode", False) else 10
+        self.battery = min(100, self.battery + charge_rate)
         if self.battery >= 100:
             self.status = "active"
 

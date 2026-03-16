@@ -61,8 +61,8 @@ export default function ControlPanel({
   ];
 
   return (
-    <div className="bg-gray-900 rounded border border-gray-800 p-2 flex flex-col gap-2 overflow-y-auto min-h-0">
-      <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex-shrink-0">
+    <div className="bg-white rounded border border-gray-200 shadow-sm p-2 flex flex-col gap-2 overflow-y-auto min-h-0">
+      <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex-shrink-0">
         Controls
       </h2>
 
@@ -71,10 +71,10 @@ export default function ControlPanel({
         {statTiles.map((tile) => (
           <div
             key={tile.label}
-            className="bg-gray-800 rounded p-1.5 text-center border border-gray-700"
+            className="bg-gray-50 rounded p-1.5 text-center border border-gray-200"
           >
-            <div className="text-[9px] text-gray-500">{tile.label}</div>
-            <div className="text-xs font-bold text-cyan-300 mt-0.5">{tile.value}</div>
+            <div className="text-[10px] text-gray-500">{tile.label}</div>
+            <div className="text-xs font-bold text-cyan-700 mt-0.5">{tile.value}</div>
           </div>
         ))}
       </div>
@@ -83,9 +83,9 @@ export default function ControlPanel({
       <button
         onClick={onStart}
         disabled={missionRunning}
-        className="w-full py-1.5 text-xs font-medium rounded bg-cyan-800 hover:bg-cyan-700
-          disabled:bg-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed
-          text-cyan-100 transition-colors flex-shrink-0"
+        className="w-full py-1.5 text-xs font-medium rounded bg-cyan-600 hover:bg-cyan-500 border border-cyan-500
+          disabled:bg-gray-100 disabled:text-gray-400 disabled:border-gray-200 disabled:cursor-not-allowed
+          text-white transition-colors flex-shrink-0"
       >
         {missionRunning ? 'Mission Running...' : 'Start Mission'}
       </button>
@@ -93,8 +93,8 @@ export default function ControlPanel({
       {/* Manual Step */}
       <button
         onClick={() => onStep(1)}
-        className="w-full py-1.5 text-xs font-medium rounded bg-gray-700 hover:bg-gray-600
-          text-gray-200 transition-colors flex-shrink-0"
+        className="w-full py-1.5 text-xs font-medium rounded bg-gray-100 hover:bg-gray-200
+          text-gray-800 border border-gray-300 transition-colors flex-shrink-0"
       >
         +1 Step
       </button>
@@ -102,10 +102,10 @@ export default function ControlPanel({
       {/* Voice toggle */}
       <button
         onClick={onVoiceToggle}
-        className={`w-full py-1.5 text-xs font-medium rounded transition-colors flex-shrink-0 ${
+        className={`w-full py-1.5 text-xs font-medium rounded transition-colors flex-shrink-0 border ${
           voiceEnabled
-            ? 'bg-yellow-800 hover:bg-yellow-700 text-yellow-100'
-            : 'bg-gray-700 hover:bg-gray-600 text-gray-200'
+            ? 'bg-amber-100 hover:bg-amber-200 text-amber-800 border-amber-300'
+            : 'bg-gray-100 hover:bg-gray-200 text-gray-800 border-gray-300'
         }`}
       >
         {voiceEnabled ? 'Voice On' : 'Voice Off'}
@@ -114,16 +114,16 @@ export default function ControlPanel({
       {/* Trigger Blackout toggle */}
       <button
         onClick={() => setShowBlackout((v) => !v)}
-        className="w-full py-1.5 text-xs font-medium rounded bg-purple-900 hover:bg-purple-800
-          text-purple-200 transition-colors flex-shrink-0"
+        className="w-full py-1.5 text-xs font-medium rounded bg-purple-600 hover:bg-purple-500
+          text-white border border-purple-500 transition-colors flex-shrink-0"
       >
         {showBlackout ? 'Cancel Blackout' : 'Trigger Blackout'}
       </button>
 
       {/* Inline blackout config */}
       {showBlackout && (
-        <div className="bg-gray-800 rounded p-2 border border-purple-800 flex flex-col gap-1.5 flex-shrink-0">
-          <span className="text-[10px] text-purple-300 font-medium">Blackout Zone</span>
+        <div className="bg-purple-50 rounded p-2 border border-purple-200 flex flex-col gap-1.5 flex-shrink-0">
+          <span className="text-[10px] text-purple-700 font-medium">Blackout Zone</span>
           {(
             [
               ['Zone X', bx, setBx, 0, 11],
@@ -132,15 +132,15 @@ export default function ControlPanel({
             ] as [string, number, (v: number) => void, number, number][]
           ).map(([label, val, setter, min, max]) => (
             <label key={label} className="flex items-center justify-between text-[10px]">
-              <span className="text-gray-400">{label}</span>
+              <span className="text-gray-600">{label}</span>
               <input
                 type="number"
                 min={min}
                 max={max}
                 value={val}
                 onChange={(e) => setter(Number(e.target.value))}
-                className="w-12 bg-gray-700 text-gray-100 rounded px-1 py-0.5 text-right
-                  border border-gray-600 focus:outline-none focus:border-purple-500"
+                className="w-12 bg-white text-gray-800 rounded px-1 py-0.5 text-right
+                  border border-gray-300 focus:outline-none focus:border-purple-400"
               />
             </label>
           ))}
@@ -149,8 +149,8 @@ export default function ControlPanel({
               onBlackout(bx, by, br);
               setShowBlackout(false);
             }}
-            className="w-full py-1 mt-0.5 rounded bg-purple-700 hover:bg-purple-600
-              text-purple-100 text-xs font-medium transition-colors"
+            className="w-full py-1 mt-0.5 rounded bg-purple-600 hover:bg-purple-500
+              text-white text-xs font-medium transition-colors border border-purple-500"
           >
             Deploy Blackout
           </button>
@@ -160,10 +160,10 @@ export default function ControlPanel({
       {/* Reset */}
       <button
         onClick={handleReset}
-        className={`w-full py-1.5 text-xs font-medium rounded transition-colors flex-shrink-0 ${
+        className={`w-full py-1.5 text-xs font-medium rounded transition-colors flex-shrink-0 mt-1 border ${
           resetArmed
-            ? 'bg-red-800 hover:bg-red-700 text-red-100 animate-pulse'
-            : 'bg-gray-700 hover:bg-gray-600 text-gray-200'
+            ? 'bg-red-600 hover:bg-red-500 text-white border-red-500 animate-pulse'
+            : 'bg-gray-100 hover:bg-gray-200 text-gray-800 border-gray-300'
         }`}
       >
         {resetArmed ? 'Confirm Reset?' : 'Reset Simulation'}

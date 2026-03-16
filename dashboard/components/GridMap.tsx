@@ -93,6 +93,9 @@ export default function GridMap({ state, gridEffect }: GridMapProps) {
   const gridRef = useRef<HTMLDivElement>(null);
   const [gridSize, setGridSize] = useState({ width: 0, height: 0 });
 
+  // Track previous drone positions for distance-proportional transitions
+  const prevPositions = useRef<Record<string, [number, number]>>({});
+
   useEffect(() => {
     const el = gridRef.current;
     if (!el) return;
@@ -102,7 +105,7 @@ export default function GridMap({ state, gridEffect }: GridMapProps) {
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [state !== null]);
 
   // Compute disaster-affected cells for the current step
   const { floodedCells, aftershockCells } = useMemo(() => {
@@ -123,8 +126,8 @@ export default function GridMap({ state, gridEffect }: GridMapProps) {
 
   if (!state) {
     return (
-      <div className="bg-gray-900 rounded border border-gray-800 p-2 flex items-center justify-center">
-        <span className="text-gray-600 text-sm">Connecting to simulation...</span>
+      <div className="bg-white rounded border border-gray-200 shadow-sm p-2 flex items-center justify-center">
+        <span className="text-gray-500 text-sm">Connecting to simulation...</span>
       </div>
     );
   }
@@ -185,7 +188,7 @@ export default function GridMap({ state, gridEffect }: GridMapProps) {
           {/* Base station marker */}
           {isBase && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
-              <span className="text-[6px] font-bold text-yellow-300 leading-none">BASE</span>
+              <span className="text-[7px] font-bold text-yellow-300 leading-none">BASE</span>
             </div>
           )}
 
@@ -210,12 +213,12 @@ export default function GridMap({ state, gridEffect }: GridMapProps) {
   }
 
   return (
-    <div className="bg-gray-900 rounded border border-gray-800 p-2 flex flex-col min-h-0">
+    <div className="bg-white rounded border border-gray-200 shadow-sm p-2 flex flex-col min-h-0">
       <div className="flex items-center justify-between mb-1.5 flex-shrink-0">
-        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+        <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
           Grid Map
         </h2>
-        <span className="text-[10px] text-gray-600">
+        <span className="text-[10px] text-gray-500">
           Step {state.mission_step} &middot; {state.stats.coverage_pct}% covered
         </span>
       </div>
@@ -232,32 +235,59 @@ export default function GridMap({ state, gridEffect }: GridMapProps) {
         {cells}
 
         {/* Drone overlays — rendered on top of grid for smooth animation */}
-        {gridSize.width > 0 && Object.values(state.drones).map((d) => {
+        {gridSize.width > 0 && (() => {
+          const droneList = Object.values(state.drones);
+          // Group by cell to offset overlapping drones
+          const dronesByCell = new Map<string, number>();
+          const droneIndex = new Map<string, number>();
+          for (const d of droneList) {
+            const key = `${d.position[0]},${d.position[1]}`;
+            const count = dronesByCell.get(key) ?? 0;
+            droneIndex.set(d.drone_id, count);
+            dronesByCell.set(key, count + 1);
+          }
+
           const cellW = gridSize.width / GRID_SIZE;
           const cellH = gridSize.height / GRID_SIZE;
-          // x maps to left; y is inverted (row 0 = bottom of visual grid)
-          const left = d.position[0] * cellW + 2;
-          const top = (GRID_SIZE - 1 - d.position[1]) * cellH + 2;
-          return (
-            <div
-              key={d.drone_id}
-              className={`pointer-events-none ${!d.connected ? 'blink' : ''}`}
-              style={{
-                position: 'absolute',
-                left,
-                top,
-                width: 9,
-                height: 9,
-                transition: 'left 0.4s ease, top 0.4s ease',
-                background: DRONE_COLORS[d.drone_id] ?? '#ffffff',
-                borderRadius: '50%',
-                border: d.is_relay ? '2px solid rgba(255,255,255,0.9)' : '1px solid rgba(0,0,0,0.4)',
-                boxShadow: `0 0 4px ${DRONE_COLORS[d.drone_id] ?? '#fff'}80`,
-                zIndex: 10,
-              }}
-            />
-          );
-        })}
+
+          return droneList.map((d) => {
+            // Distance-proportional transition duration
+            const prev = prevPositions.current[d.drone_id] ?? d.position;
+            const dist = Math.abs(d.position[0] - prev[0]) + Math.abs(d.position[1] - prev[1]);
+            const duration = Math.max(0.4, dist * 0.25);
+            prevPositions.current[d.drone_id] = d.position;
+
+            // Offset when multiple drones share a cell
+            const key = `${d.position[0]},${d.position[1]}`;
+            const idx = droneIndex.get(d.drone_id) ?? 0;
+            const total = dronesByCell.get(key) ?? 1;
+            const offsetX = total > 1 ? (idx % 2) * 13 : 0;
+            const offsetY = total > 1 ? Math.floor(idx / 2) * 13 : 0;
+
+            const left = d.position[0] * cellW + 2 + offsetX;
+            const top = (GRID_SIZE - 1 - d.position[1]) * cellH + 2 + offsetY;
+
+            return (
+              <div
+                key={d.drone_id}
+                className={`pointer-events-none ${!d.connected ? 'blink' : ''}`}
+                style={{
+                  position: 'absolute',
+                  left,
+                  top,
+                  width: 11,
+                  height: 11,
+                  transition: `left ${duration}s ease-in-out, top ${duration}s ease-in-out`,
+                  background: DRONE_COLORS[d.drone_id] ?? '#ffffff',
+                  borderRadius: '50%',
+                  border: d.is_relay ? '2px solid rgba(255,255,255,0.9)' : '1px solid rgba(0,0,0,0.4)',
+                  boxShadow: `0 0 6px ${DRONE_COLORS[d.drone_id] ?? '#fff'}80`,
+                  zIndex: 10,
+                }}
+              />
+            );
+          });
+        })()}
       </div>
 
       {/* Legend */}
@@ -265,7 +295,7 @@ export default function GridMap({ state, gridEffect }: GridMapProps) {
         {(Object.entries(TERRAIN_BG) as [TerrainType, string][]).map(([t, cls]) => (
           <span key={t} className="flex items-center gap-1 text-[9px] text-gray-500">
             <span className={`inline-block w-2 h-2 rounded-sm ${cls}`} />
-            {t}
+            {t.charAt(0) + t.slice(1).toLowerCase()}
           </span>
         ))}
         <span className="flex items-center gap-1 text-[9px] text-gray-500">

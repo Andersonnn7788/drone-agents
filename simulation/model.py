@@ -9,10 +9,11 @@ from .mesh_network import compute_mesh_topology, apply_blackout, manhattan_dista
 
 
 class DisasterModel(mesa.Model):
-    def __init__(self, seed=42, width=12, height=12, num_drones=4, num_survivors=8):
+    def __init__(self, seed=42, width=12, height=12, num_drones=4, num_survivors=8, demo_mode=False):
         super().__init__(seed=seed)
         self.width = width
         self.height = height
+        self.demo_mode = demo_mode
         self.grid = mesa.space.MultiGrid(width, height, torus=False)
         self._rng = random.Random(seed)
 
@@ -43,13 +44,28 @@ class DisasterModel(mesa.Model):
             self.drones[name] = drone
             self.grid.place_agent(drone, (0, 0))
 
-        # Create survivors at random passable positions
+        # Create survivors
+        if demo_mode:
+            self._place_demo_survivors(num_survivors)
+        else:
+            self._place_random_survivors(num_survivors)
+
+        # Initial mesh computation
+        self.mesh_topology = compute_mesh_topology(self.drones)
+
+        # Record initial state
+        self.state_history.append(self.get_state())
+
+    # ── Survivor placement ─────────────────────────────────────────────
+
+    def _place_random_survivors(self, num_survivors):
+        """Place survivors at random passable positions (full sim)."""
         self.survivors = []
         severities = (["CRITICAL"] * 3 + ["MODERATE"] * 3 + ["STABLE"] * 2)[:num_survivors]
         while len(severities) < num_survivors:
             severities.append("MODERATE")
         passable = [
-            (x, y) for x in range(width) for y in range(height)
+            (x, y) for x in range(self.width) for y in range(self.height)
             if self.terrain[y][x] not in ("WATER",) and (x, y) != (0, 0)
         ]
         positions = self._rng.sample(passable, min(num_survivors, len(passable)))
@@ -58,11 +74,22 @@ class DisasterModel(mesa.Model):
             self.survivors.append(survivor)
             self.grid.place_agent(survivor, pos)
 
-        # Initial mesh computation
-        self.mesh_topology = compute_mesh_topology(self.drones)
-
-        # Record initial state
-        self.state_history.append(self.get_state())
+    def _place_demo_survivors(self, num_survivors):
+        """Place survivors at strategic positions near building clusters (demo mode).
+        Guarantees each quadrant drone finds a survivor quickly."""
+        self.survivors = []
+        # Deterministic placements: 2 CRITICAL, 2 MODERATE, 1 STABLE
+        demo_placements = [
+            ((3, 3), "CRITICAL"),    # SW building cluster
+            ((9, 9), "CRITICAL"),    # NE building cluster
+            ((3, 10), "MODERATE"),   # NW building cluster
+            ((10, 2), "MODERATE"),   # SE building cluster
+            ((6, 6), "STABLE"),      # center of map
+        ]
+        for (x, y), severity in demo_placements[:num_survivors]:
+            survivor = SurvivorAgent(self, severity)
+            self.survivors.append(survivor)
+            self.grid.place_agent(survivor, (x, y))
 
     # ── Terrain ───────────────────────────────────────────────────────
 
@@ -157,8 +184,11 @@ class DisasterModel(mesa.Model):
             drone.step()
 
         # 5. Dynamic disasters
-        self._check_aftershock()
-        self._check_rising_water()
+        if self.demo_mode:
+            self._demo_scripted_events()
+        else:
+            self._check_aftershock()
+            self._check_rising_water()
 
         # 6. Recompute mesh topology
         self.mesh_topology = compute_mesh_topology(self.drones)
@@ -240,6 +270,74 @@ class DisasterModel(mesa.Model):
                 "flooded_cells": expanded,
             }
             self.disaster_events.append(event)
+
+    # ── Demo scripted events ─────────────────────────────────────────
+
+    def _demo_scripted_events(self):
+        """Deterministic demo events at specific steps."""
+        step = self.mission_step
+
+        # Step 6: Aftershock near (5, 4)
+        if step == 6:
+            cx, cy = 5, 4
+            converted = []
+            for dx in range(-1, 2):
+                for dy in range(-1, 2):
+                    nx, ny = cx + dx, cy + dy
+                    if (0 <= nx < self.width and 0 <= ny < self.height
+                            and self.terrain[ny][nx] == "OPEN" and len(converted) < 3):
+                        self.terrain[ny][nx] = "DEBRIS"
+                        self.pheromone_danger[ny][nx] = 1.0
+                        self.heatmap[ny][nx] = max(0.05, self.heatmap[ny][nx] * 0.3)
+                        converted.append([nx, ny])
+            if converted:
+                self.disaster_events.append({
+                    "type": "aftershock",
+                    "step": step,
+                    "center": [cx, cy],
+                    "affected_cells": converted,
+                })
+
+        # Step 10: Blackout at (8, 8) radius 3
+        elif step == 10:
+            self.trigger_blackout(8, 8, 3)
+
+        # Step 15: Blackout clears
+        elif step == 15:
+            if self.blackout_zones:
+                self.blackout_zones.clear()
+                # Restore connectivity for all drones
+                for drone in self.drones.values():
+                    drone.connected = True
+                self.disaster_events.append({
+                    "type": "blackout_cleared",
+                    "step": step,
+                    "message": "Communication blackout has lifted. All drones reconnected.",
+                })
+
+        # Step 18: Rising water near (10, 7)
+        elif step == 18:
+            wx, wy = 10, 7
+            expanded = []
+            for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                nx, ny = wx + dx, wy + dy
+                if (0 <= nx < self.width and 0 <= ny < self.height
+                        and self.terrain[ny][nx] in ("OPEN", "ROAD") and len(expanded) < 1):
+                    self.terrain[ny][nx] = "WATER"
+                    self.pheromone_danger[ny][nx] = 1.0
+                    expanded.append([nx, ny])
+                    # Kill survivors in flooded cells
+                    for agent in self.grid.get_cell_list_contents([(nx, ny)]):
+                        if isinstance(agent, SurvivorAgent) and agent.alive:
+                            agent.alive = False
+                            agent.health = 0
+            if expanded:
+                self.disaster_events.append({
+                    "type": "rising_water",
+                    "step": step,
+                    "source": [wx, wy],
+                    "flooded_cells": expanded,
+                })
 
     # ── Digital twin / mission simulation ─────────────────────────────
 

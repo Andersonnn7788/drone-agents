@@ -84,7 +84,7 @@ export default function MeshGraph({ state }: MeshGraphProps) {
   if (!state) {
     return (
       <div className="flex items-center justify-center h-full">
-        <span className="text-gray-600 text-sm">No data</span>
+        <span className="text-gray-500 text-sm">No data</span>
       </div>
     );
   }
@@ -117,15 +117,15 @@ export default function MeshGraph({ state }: MeshGraphProps) {
   }
 
   const connColor =
-    connectivity >= 75 ? 'text-green-400' : connectivity >= 40 ? 'text-yellow-400' : 'text-red-400';
+    connectivity >= 75 ? 'text-green-700' : connectivity >= 40 ? 'text-yellow-700' : 'text-red-700';
   const connBg =
-    connectivity >= 75 ? 'bg-green-900/50' : connectivity >= 40 ? 'bg-yellow-900/50' : 'bg-red-900/50';
+    connectivity >= 75 ? 'bg-green-50 border border-green-200' : connectivity >= 40 ? 'bg-yellow-50 border border-yellow-200' : 'bg-red-50 border border-red-200';
 
   return (
     <div className="flex flex-col h-full">
       <svg viewBox={`0 0 ${SVG_SIZE} ${SVG_SIZE}`} className="flex-1 min-h-0">
-        {/* Grid background hint */}
-        <rect x="0" y="0" width={SVG_SIZE} height={SVG_SIZE} fill="#111827" rx="4" />
+        {/* Light background */}
+        <rect x="0" y="0" width={SVG_SIZE} height={SVG_SIZE} fill="#f8fafc" rx="4" />
 
         {/* Edges */}
         {edges.map(({ from, to, baseConnected }) => {
@@ -139,9 +139,9 @@ export default function MeshGraph({ state }: MeshGraphProps) {
               y1={p1[1]}
               x2={p2[0]}
               y2={p2[1]}
-              stroke={baseConnected ? '#22d3ee' : '#4b5563'}
+              stroke={baseConnected ? '#0891b2' : '#94a3b8'}
               strokeWidth={baseConnected ? 1.5 : 1}
-              strokeOpacity={baseConnected ? 0.7 : 0.4}
+              strokeOpacity={baseConnected ? 0.8 : 0.5}
             />
           );
         })}
@@ -157,11 +157,11 @@ export default function MeshGraph({ state }: MeshGraphProps) {
                 width={16}
                 height={16}
                 rx={3}
-                fill="#854d0e"
-                stroke="#facc15"
+                fill="#92400e"
+                stroke="#d97706"
                 strokeWidth={1.5}
               />
-              <text x={bx} y={by + 3.5} textAnchor="middle" fill="#facc15" fontSize="7" fontWeight="bold">
+              <text x={bx} y={by + 3.5} textAnchor="middle" fill="#fef3c7" fontSize="7" fontWeight="bold">
                 BASE
               </text>
             </g>
@@ -190,7 +190,7 @@ export default function MeshGraph({ state }: MeshGraphProps) {
                   stroke={color}
                   strokeWidth={1}
                   strokeDasharray="3 2"
-                  opacity={0.4}
+                  opacity={0.5}
                 />
               )}
               {/* Drone circle */}
@@ -199,7 +199,7 @@ export default function MeshGraph({ state }: MeshGraphProps) {
                 cy={cy}
                 r={isRelay ? 7 : 5}
                 fill={color}
-                stroke={isDisconnected ? '#ef4444' : '#000'}
+                stroke={isDisconnected ? '#ef4444' : 'rgba(0,0,0,0.2)'}
                 strokeWidth={isDisconnected ? 2 : 1}
                 opacity={0.9}
               />
@@ -208,7 +208,7 @@ export default function MeshGraph({ state }: MeshGraphProps) {
                 x={cx}
                 y={cy + (isRelay ? 15 : 13)}
                 textAnchor="middle"
-                fill={color}
+                fill="#374151"
                 fontSize="8"
                 fontWeight="bold"
               >
@@ -221,7 +221,7 @@ export default function MeshGraph({ state }: MeshGraphProps) {
 
       {/* Connectivity badge */}
       <div className={`flex items-center justify-center gap-1.5 py-1 rounded ${connBg} mt-1`}>
-        <span className={`text-[10px] font-semibold ${connColor}`}>
+        <span className={`text-[10px] font-semibold font-mono ${connColor}`}>
           {connectivity}% Connected
         </span>
       </div>

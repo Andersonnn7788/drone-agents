@@ -31,8 +31,8 @@ export default function TimelineSlider({
   };
 
   return (
-    <div className="bg-gray-900 rounded border border-gray-800 px-3 py-2 flex items-center gap-3 flex-shrink-0">
-      <span className="text-[10px] text-gray-500 uppercase tracking-wider whitespace-nowrap">
+    <div className="bg-white rounded border border-gray-200 shadow-sm px-3 py-2 flex items-center gap-3 flex-shrink-0">
+      <span className="text-[10px] text-gray-600 uppercase tracking-wider whitespace-nowrap font-medium">
         Timeline
       </span>
 
@@ -43,29 +43,29 @@ export default function TimelineSlider({
         value={sliderValue ?? 0}
         onChange={handleChange}
         disabled={totalSteps === 0}
-        className="flex-1 accent-cyan-400 cursor-pointer disabled:opacity-30"
+        className="flex-1 accent-cyan-600 cursor-pointer disabled:opacity-30"
       />
 
       <div className="flex items-center gap-2 flex-shrink-0">
         <span className="text-[10px] w-24 text-center">
           {isLive ? (
-            <span className="text-green-400 font-medium">LIVE s{currentStep}</span>
+            <span className="text-green-600 font-medium">LIVE s{currentStep}</span>
           ) : (
-            <span className="text-amber-300">Replay s{replayStep}</span>
+            <span className="text-amber-700">Replay s{replayStep}</span>
           )}
         </span>
 
         {!isLive && (
           <button
             onClick={onGoLive}
-            className="text-[10px] px-2 py-0.5 rounded bg-green-900 hover:bg-green-800
-              text-green-300 font-medium whitespace-nowrap transition-colors border border-green-700"
+            className="text-[10px] px-2 py-0.5 rounded bg-green-50 hover:bg-green-100
+              text-green-700 font-medium whitespace-nowrap transition-colors border border-green-300"
           >
             Go Live
           </button>
         )}
 
-        <span className="text-[10px] text-gray-600 whitespace-nowrap">
+        <span className="text-[10px] text-gray-400 whitespace-nowrap">
           {history.snapshots.length} snapshots
         </span>
       </div>

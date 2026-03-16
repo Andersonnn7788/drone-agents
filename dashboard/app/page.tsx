@@ -7,6 +7,7 @@ import {
   DisasterEvent,
   HistoryResponse,
   LogEntry,
+  MissionCompleteData,
   SimState,
 } from '@/lib/api';
 import GridMap from '@/components/GridMap';
@@ -27,6 +28,8 @@ export default function Page() {
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [rightTab, setRightTab] = useState<'fleet' | 'mesh'>('fleet');
   const [gridEffect, setGridEffect] = useState<'aftershock' | 'water' | null>(null);
+  const [missionComplete, setMissionComplete] = useState(false);
+  const [completionData, setCompletionData] = useState<MissionCompleteData | null>(null);
 
   // Keep a ref to the latest simState for use in SSE handlers
   const simStateRef = useRef<SimState | null>(null);
@@ -69,6 +72,11 @@ export default function Page() {
         setFlashBlackout(true);
         setTimeout(() => setFlashBlackout(false), 1200);
         api.getState().then(setSimState).catch(() => {});
+      },
+      onMissionComplete: (data) => {
+        setMissionComplete(true);
+        setCompletionData(data);
+        setMissionRunning(false);
       },
     });
 
@@ -117,6 +125,8 @@ export default function Page() {
     try {
       await api.reset();
       setMissionRunning(false);
+      setMissionComplete(false);
+      setCompletionData(null);
       setLogs([]);
       setReplayStep(null);
       const [state, hist] = await Promise.all([api.getState(), api.getHistory()]);
@@ -129,18 +139,18 @@ export default function Page() {
 
   return (
     <div
-      className={`h-screen flex flex-col p-2 gap-2 bg-gray-950 ${
+      className={`h-screen flex flex-col p-2 gap-2 bg-slate-100 ${
         flashBlackout ? 'blackout-flash-active' : ''
       }`}
     >
       {/* Header */}
-      <header className="flex items-center justify-between px-3 py-1.5 bg-gray-900 rounded border border-gray-800 flex-shrink-0">
+      <header className="flex items-center justify-between px-3 py-1.5 bg-white rounded border border-gray-200 shadow-sm flex-shrink-0">
         <div className="flex items-center gap-3">
-          <h1 className="text-sm font-bold text-cyan-400 tracking-widest uppercase">
+          <h1 className="text-sm font-bold text-cyan-700 tracking-widest uppercase">
             Drone Swarm — Mission Control
           </h1>
           {replayStep !== null && (
-            <span className="text-[10px] px-2 py-0.5 rounded bg-amber-900 text-amber-300 font-medium uppercase tracking-wide">
+            <span className="text-[10px] px-2 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200 font-medium uppercase tracking-wide">
               Replay Mode
             </span>
           )}
@@ -148,10 +158,10 @@ export default function Page() {
         <div className="flex items-center gap-2 text-xs">
           <span
             className={`w-2 h-2 rounded-full ${
-              connected ? 'bg-green-400' : 'bg-red-500 blink'
+              connected ? 'bg-green-500' : 'bg-red-500 blink'
             }`}
           />
-          <span className="text-gray-400">
+          <span className="text-gray-600">
             {connected
               ? `Step ${displayState?.mission_step ?? 0}`
               : 'Reconnecting...'}
@@ -164,14 +174,14 @@ export default function Page() {
         <GridMap state={displayState} gridEffect={gridEffect} />
 
         {/* Right column top: Fleet / Mesh tabs */}
-        <div className="bg-gray-900 rounded border border-gray-800 p-2 flex flex-col min-h-0">
+        <div className="bg-white rounded border border-gray-200 shadow-sm p-2 flex flex-col min-h-0">
           <div className="flex gap-1 mb-2 flex-shrink-0">
             <button
               onClick={() => setRightTab('fleet')}
               className={`flex-1 py-1 text-[10px] font-semibold uppercase tracking-wider rounded transition-colors ${
                 rightTab === 'fleet'
-                  ? 'bg-gray-700 text-cyan-300'
-                  : 'text-gray-500 hover:text-gray-300'
+                  ? 'bg-cyan-50 text-cyan-700 border border-cyan-200'
+                  : 'text-gray-500 hover:text-gray-700'
               }`}
             >
               Fleet
@@ -180,8 +190,8 @@ export default function Page() {
               onClick={() => setRightTab('mesh')}
               className={`flex-1 py-1 text-[10px] font-semibold uppercase tracking-wider rounded transition-colors ${
                 rightTab === 'mesh'
-                  ? 'bg-gray-700 text-cyan-300'
-                  : 'text-gray-500 hover:text-gray-300'
+                  ? 'bg-cyan-50 text-cyan-700 border border-cyan-200'
+                  : 'text-gray-500 hover:text-gray-700'
               }`}
             >
               Mesh
@@ -217,6 +227,63 @@ export default function Page() {
         onStepChange={setReplayStep}
         onGoLive={() => setReplayStep(null)}
       />
+
+      {/* Mission Completed overlay */}
+      {missionComplete && completionData && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center">
+          <div className="bg-white rounded-xl shadow-2xl p-8 max-w-md w-full mx-4">
+            <div className="text-center mb-6">
+              <div className={`inline-flex items-center justify-center w-16 h-16 rounded-full mb-3 ${
+                completionData.stats.rescued >= completionData.stats.total_survivors
+                  ? 'bg-green-100 text-green-600'
+                  : 'bg-amber-100 text-amber-600'
+              }`}>
+                <span className="text-3xl">
+                  {completionData.stats.rescued >= completionData.stats.total_survivors ? '\u2713' : '!'}
+                </span>
+              </div>
+              <h2 className="text-xl font-bold text-gray-900">Mission Completed</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                {completionData.stats.rescued >= completionData.stats.total_survivors
+                  ? 'All survivors rescued successfully'
+                  : `${completionData.stats.rescued} of ${completionData.stats.total_survivors} survivors rescued`}
+              </p>
+            </div>
+            <div className="grid grid-cols-3 gap-3 mb-6">
+              <div className="bg-green-50 rounded-lg p-3 text-center">
+                <div className="text-lg font-bold text-green-700">{completionData.stats.rescued}</div>
+                <div className="text-[10px] text-green-600 uppercase tracking-wide">Rescued</div>
+              </div>
+              <div className="bg-blue-50 rounded-lg p-3 text-center">
+                <div className="text-lg font-bold text-blue-700">{completionData.stats.alive}</div>
+                <div className="text-[10px] text-blue-600 uppercase tracking-wide">Alive</div>
+              </div>
+              <div className="bg-slate-50 rounded-lg p-3 text-center">
+                <div className="text-lg font-bold text-slate-700">{completionData.mission_step}</div>
+                <div className="text-[10px] text-slate-600 uppercase tracking-wide">Steps</div>
+              </div>
+              <div className="bg-cyan-50 rounded-lg p-3 text-center">
+                <div className="text-lg font-bold text-cyan-700">{completionData.stats.coverage_pct}%</div>
+                <div className="text-[10px] text-cyan-600 uppercase tracking-wide">Coverage</div>
+              </div>
+              <div className="bg-purple-50 rounded-lg p-3 text-center">
+                <div className="text-lg font-bold text-purple-700">{completionData.stats.active_drones}</div>
+                <div className="text-[10px] text-purple-600 uppercase tracking-wide">Drones Active</div>
+              </div>
+              <div className="bg-red-50 rounded-lg p-3 text-center">
+                <div className="text-lg font-bold text-red-700">{completionData.disaster_event_count}</div>
+                <div className="text-[10px] text-red-600 uppercase tracking-wide">Disasters</div>
+              </div>
+            </div>
+            <button
+              onClick={handleReset}
+              className="w-full py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white font-semibold rounded-lg transition-colors text-sm"
+            >
+              Reset &amp; Start New Mission
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
