@@ -80,7 +80,11 @@ export default function Page() {
       },
     });
 
-    es.onopen = () => setConnected(true);
+    es.onopen = () => {
+      setConnected(true);
+      // Backfill any logs missed during disconnect gap
+      api.getLogs().then(setLogs).catch(() => {});
+    };
     es.onerror = () => setConnected(false);
 
     return () => es.close();

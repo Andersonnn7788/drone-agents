@@ -277,8 +277,8 @@ class DisasterModel(mesa.Model):
         """Deterministic demo events at specific steps."""
         step = self.mission_step
 
-        # Step 6: Aftershock near (5, 4)
-        if step == 6:
+        # Step 4: Aftershock near (5, 4)
+        if step == 4:
             cx, cy = 5, 4
             converted = []
             for dx in range(-1, 2):
@@ -298,12 +298,12 @@ class DisasterModel(mesa.Model):
                     "affected_cells": converted,
                 })
 
-        # Step 10: Blackout at (8, 8) radius 3
-        elif step == 10:
+        # Step 6: Blackout at (8, 8) radius 3
+        elif step == 6:
             self.trigger_blackout(8, 8, 3)
 
-        # Step 15: Blackout clears
-        elif step == 15:
+        # Step 9: Blackout clears
+        elif step == 9:
             if self.blackout_zones:
                 self.blackout_zones.clear()
                 # Restore connectivity for all drones
@@ -315,8 +315,8 @@ class DisasterModel(mesa.Model):
                     "message": "Communication blackout has lifted. All drones reconnected.",
                 })
 
-        # Step 18: Rising water near (10, 7)
-        elif step == 18:
+        # Step 11: Rising water near (10, 7)
+        elif step == 11:
             wx, wy = 10, 7
             expanded = []
             for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:

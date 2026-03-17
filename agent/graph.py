@@ -43,23 +43,19 @@ def _summarize_tool_result(tool_name: str, raw_content_blocks: list) -> str | No
             return f"Priority map: range [{lo:.2f}, {hi:.2f}], top: {top_str}"
 
         if tool_name == "get_pheromone_map":
-            text = "\n".join(parts)
+            # MCP returns {"scanned": [[...], ...], "survivor_nearby": [[...], ...], "danger": [[...], ...]}
+            # Parse the JSON and count cells > 0 for each layer.
+            import json as _json
             counts: dict[str, int] = {}
-            for layer in ("scanned", "survivor_nearby", "danger"):
-                # Count non-zero entries per layer
-                # Each layer section lists values; count values > 0
-                section = re.split(r"---+", text)
-                count = 0
-                for p in parts:
-                    p_lower = p.lower()
-                    if layer.replace("_", " ") in p_lower or layer in p_lower:
-                        try:
-                            val = float(p.split(":")[-1].strip()) if ":" in p else float(p.strip())
-                            if val > 0:
-                                count += 1
-                        except (ValueError, IndexError):
-                            pass
-                counts[layer] = count
+            try:
+                data = _json.loads("\n".join(parts))
+                for layer in ("scanned", "survivor_nearby", "danger"):
+                    grid = data.get(layer, [])
+                    count = sum(1 for row in grid for val in row if val > 0)
+                    counts[layer] = count
+            except (ValueError, TypeError, KeyError):
+                for layer in ("scanned", "survivor_nearby", "danger"):
+                    counts[layer] = 0
             entries = ", ".join(f"{k}={v} active" for k, v in counts.items())
             return f"Pheromone map: {entries}"
 
@@ -75,8 +71,9 @@ def _summarize_tool_result(tool_name: str, raw_content_blocks: list) -> str | No
 
         if tool_name == "thermal_scan":
             text = "\n".join(parts)
-            text_lower = text.lower()
-            if "found" in text_lower or "survivor" in text_lower:
+            # Check for actual survivors, not just the substring "survivor"
+            has_survivors = '"survivors_found": [' in text and '"survivors_found": []' not in text
+            if has_survivors:
                 return f"Scan: {text[:200]}"
             return f"Scan: no survivors detected. {text[:100]}"
 
@@ -102,8 +99,11 @@ def _summarize_tool_result(tool_name: str, raw_content_blocks: list) -> str | No
     return None
 
 
-def _emit_narrative(tool_name: str, raw_content_blocks: list):
-    """Generate synthetic narrative log entries for key mission events."""
+def _emit_narrative(tool_name: str, raw_content_blocks: list) -> bool:
+    """Generate human-language narrative log entries for mission events.
+
+    Returns True if a narrative entry was emitted, False otherwise.
+    """
     parts: list[str] = []
     for block in raw_content_blocks:
         if isinstance(block, dict) and "text" in block:
@@ -112,47 +112,221 @@ def _emit_narrative(tool_name: str, raw_content_blocks: list):
             parts.append(block)
 
     text = "\n".join(parts).lower()
+    full = "\n".join(parts)
 
     try:
+        # --- Triage events (keep as msg_type="triage") ---
+
         if tool_name == "thermal_scan":
-            if "found" in text or "survivor" in text:
-                # Extract key details
-                full = "\n".join(parts)
+            # Only emit triage when survivors were actually found.
+            # The result JSON contains "survivors_found": [...]; an empty list
+            # still has the word "survivor" so we must check for real content.
+            has_survivors = False
+            try:
+                import json as _json
+                for p in parts:
+                    parsed = _json.loads(p)
+                    if isinstance(parsed, dict) and parsed.get("survivors_found"):
+                        has_survivors = True
+                        break
+            except (ValueError, TypeError, KeyError):
+                # Fallback: look for a non-empty survivors_found list in raw text
+                has_survivors = '"survivors_found": [' in full and '"survivors_found": []' not in full
+
+            if has_survivors:
                 severity = "CRITICAL" if "critical" in text else "MODERATE" if "moderate" in text else "STABLE"
                 _log_to_model(
                     f"Survivor detected — {severity}. Initiating triage protocol.",
                     msg_type="triage",
                     is_critical=(severity == "CRITICAL"),
                 )
+            else:
+                _log_to_model(
+                    "Thermal scan clear — no survivors in this sector.",
+                    msg_type="narrative",
+                )
+            return True
 
         if tool_name == "rescue_survivor":
             if "rescued" in text or "success" in text:
                 _log_to_model(
-                    f"Survivor rescued successfully.",
+                    "Survivor rescued successfully.",
                     msg_type="triage",
                     is_critical=True,
                 )
+            return True
+
+        if tool_name == "assess_survivor":
+            level = "IMMEDIATE" if "immediate" in text else "URGENT" if "urgent" in text else "DELAYED" if "delayed" in text else "STANDARD"
+            is_crit = level in ("IMMEDIATE", "URGENT")
+            detail = full[:120].strip()
+            _log_to_model(
+                f"Triage: {level} priority — {detail}.",
+                msg_type="triage" if is_crit else "narrative",
+                is_critical=is_crit,
+            )
+            return True
+
+        # --- Narrative events (msg_type="narrative") ---
+
+        if tool_name == "discover_drones":
+            # Count drones by parsing JSON drone entries
+            import json as _json
+            drone_count = 0
+            for p in parts:
+                try:
+                    parsed = _json.loads(p)
+                    if isinstance(parsed, list):
+                        drone_count += len(parsed)
+                    elif isinstance(parsed, dict) and "drone_id" in parsed:
+                        drone_count += 1
+                except (ValueError, TypeError):
+                    pass
+            if drone_count < 1:
+                # Fallback: count unique "drone_id" occurrences in text
+                drone_count = max(len(re.findall(r'"drone_id"', full)), 1)
+            _log_to_model(
+                f"Fleet online — {drone_count} drones reporting for duty.",
+                msg_type="narrative",
+                is_critical=True,
+            )
+            return True
+
+        if tool_name == "move_to":
+            if "false" in text or "fail" in text or "blocked" in text or "cannot" in text:
+                # Extract reason if available
+                reason = full[:150].strip()
+                _log_to_model(
+                    f"Movement blocked — {reason}.",
+                    msg_type="narrative",
+                    is_critical=True,
+                )
+                return True
+            # Success is NOT narrated (too frequent)
+            return True
+
+        if tool_name == "coordinate_swarm":
+            _log_to_model(
+                "Swarm sectors assigned — drones dispersing for coverage.",
+                msg_type="narrative",
+                is_critical=True,
+            )
+            return True
+
+        if tool_name == "deploy_as_relay":
+            # Try to extract drone id and position
+            import re as _re
+            drone_match = _re.search(r"drone[_\s]?(\w+)", text)
+            pos_match = _re.search(r"\((\d+),\s*(\d+)\)", full)
+            drone_id = drone_match.group(1) if drone_match else "?"
+            pos = f"({pos_match.group(1)},{pos_match.group(2)})" if pos_match else "(?)"
+            _log_to_model(
+                f"Drone {drone_id} deployed as relay at {pos} — mesh range extended.",
+                msg_type="narrative",
+                is_critical=True,
+            )
+            return True
+
+        if tool_name == "recall_drone":
+            import re as _re
+            drone_match = _re.search(r"drone[_\s]?(\w+)", text)
+            drone_id = drone_match.group(1) if drone_match else "?"
+            _log_to_model(
+                f"Drone {drone_id} recalled to base — RTB engaged.",
+                msg_type="narrative",
+                is_critical=True,
+            )
+            return True
+
+        if tool_name == "sync_findings":
+            import re as _re
+            count_match = _re.search(r"(\d+)", full)
+            count = count_match.group(1) if count_match else "?"
+            _log_to_model(
+                f"Buffered findings synced — {count} reports recovered.",
+                msg_type="narrative",
+                is_critical=True,
+            )
+            return True
+
+        if tool_name == "get_disaster_events":
+            # Only narrate when actual events exist
+            if "aftershock" in text or "rising_water" in text or "blackout" in text:
+                dtype = "Aftershock" if "aftershock" in text else "Rising water" if "rising_water" in text else "Blackout"
+                _log_to_model(
+                    f"Disaster alert — {dtype} detected. Adjusting operations.",
+                    msg_type="narrative",
+                    is_critical=True,
+                )
+            return True
+
+        if tool_name == "trigger_blackout":
+            _log_to_model(
+                "Comms blackout — affected drones switching to autonomous mode.",
+                msg_type="narrative",
+                is_critical=True,
+            )
+            return True
+
+        if tool_name == "simulate_mission":
+            if "infeasible" in text or "insufficient" in text or "false" in text or "cannot" in text:
+                _log_to_model(
+                    "Digital twin warns: insufficient fuel for round trip.",
+                    msg_type="narrative",
+                    is_critical=True,
+                )
+            return True
+
+        if tool_name == "get_battery_status":
+            # Only narrate when low batteries detected
+            import re as _re
+            batteries = _re.findall(r"(\d+)%?", full)
+            low = [int(b) for b in batteries if int(b) < 20 and int(b) > 0]
+            if low:
+                _log_to_model(
+                    f"Battery alert — drone(s) below 20%.",
+                    msg_type="narrative",
+                    is_critical=True,
+                )
+            return True
+
+        if tool_name == "get_network_resilience":
+            _log_to_model(
+                "Mesh analysis complete — reviewing connectivity.",
+                msg_type="narrative",
+            )
+            return True
+
+        if tool_name == "get_pheromone_map":
+            _log_to_model(
+                "Pheromone trails analyzed — checking hot spots.",
+                msg_type="narrative",
+            )
+            return True
+
+        if tool_name == "get_priority_map":
+            _log_to_model(
+                "Priority heatmap refreshed — targeting high-probability zones.",
+                msg_type="narrative",
+            )
+            return True
 
         if tool_name == "advance_simulation":
-            full = "\n".join(parts)
             _log_to_model(
                 f"Step advanced: {full[:150]}",
                 msg_type="system",
             )
+            return True
+
     except Exception:
-        pass
+        return False
+
+    return False
 
 
 def _log_to_model(message: str, msg_type: str = "system", is_critical: bool = False):
     """Append a log entry to the shared model so the SSE bridge can stream it."""
     model = get_model()
-    # Auto-detect triage-critical entries ONLY in natural language messages
-    if msg_type in ("reasoning", "system"):
-        msg_lower = message.lower()
-        triage_keywords = ["immediate", "critical", "urgent", "survivor found", "triage"]
-        if any(kw in msg_lower for kw in triage_keywords):
-            is_critical = True
-            msg_type = "triage"
     model.agent_logs.append({
         "step": model.mission_step,
         "timestamp": time.time(),
@@ -216,8 +390,8 @@ def build_graph(tools: list):
     # Demo mode flag
     demo_mode = os.environ.get("DEMO_MODE", "0") == "1"
 
-    # Minimum steps in demo mode — must run past all scripted events (last at step 18)
-    MIN_DEMO_STEPS = 25
+    # Minimum steps in demo mode — must run past all scripted events (last at step 11)
+    MIN_DEMO_STEPS = 13
 
     # Select prompt
     if demo_mode:
@@ -262,7 +436,10 @@ def build_graph(tools: list):
         # Log tool calls
         if response.tool_calls:
             for tc in response.tool_calls:
-                args_str = ", ".join(f"{k}={v}" for k, v in tc.get("args", {}).items())
+                args_str = ", ".join(
+                    f'{k}="{v}"' if isinstance(v, str) else f"{k}={v}"
+                    for k, v in tc.get("args", {}).items()
+                )
                 _log_to_model(
                     f"Tool call: {tc['name']}({args_str})",
                     msg_type="tool_call",
@@ -296,19 +473,19 @@ def build_graph(tools: list):
                     if len(content) > 300:
                         content = content[:300] + "..."
 
-                _log_to_model(
-                    f"Result [{msg.name}]: {content}",
-                    msg_type="result",
-                )
-
-                # Emit narrative entries for key events
-                _emit_narrative(msg.name, raw_blocks)
+                # Emit narrative entries for key events; skip raw result if narrative was emitted
+                narrated = _emit_narrative(msg.name, raw_blocks)
+                if not narrated:
+                    _log_to_model(
+                        f"Result [{msg.name}]: {content}",
+                        msg_type="result",
+                    )
 
         return result
 
     # Track nudge count to prevent infinite loops
     nudge_count = {"n": 0}
-    MAX_NUDGES = 5
+    MAX_NUDGES = 3
 
     def should_continue(state: MessagesState):
         """Custom routing: detects premature stops and nudges the agent back."""

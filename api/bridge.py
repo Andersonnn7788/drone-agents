@@ -60,10 +60,14 @@ async def _sse_generator():
     # Send initial state immediately
     model = get_model()
     last_step = model.mission_step
-    last_log_count = len(model.agent_logs)
     last_disaster_count = len(model.disaster_events)
     last_drone_hash = str([(d.drone_id, d.pos) for d in model.drones.values()])
     yield f"event: state\ndata: {json.dumps(model.get_state())}\n\n"
+
+    # Send any existing logs so clients connecting mid-mission don't miss them
+    if model.agent_logs:
+        yield f"event: logs\ndata: {json.dumps(model.agent_logs)}\n\n"
+    last_log_count = len(model.agent_logs)
 
     while True:
         await asyncio.sleep(0.15)
@@ -93,7 +97,7 @@ async def _sse_generator():
             new_events = model.disaster_events[last_disaster_count:]
             last_disaster_count = current_disaster_count
             for event in new_events:
-                event_type = "blackout" if event.get("type") == "blackout" else "disaster"
+                event_type = "blackout" if event.get("type") in ("blackout", "blackout_cleared") else "disaster"
                 yield f"event: {event_type}\ndata: {json.dumps(event)}\n\n"
 
         # Check for mission completion

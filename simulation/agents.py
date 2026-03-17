@@ -53,6 +53,10 @@ class DroneAgent(mesa.Agent):
         if self.model.terrain[y][x] == "WATER":
             return {"success": False, "reason": "cannot move to water"}
 
+        # No-op guard: don't waste battery moving to current position
+        if (x, y) == self.pos:
+            return {"success": True, "position": [x, y], "battery": self.battery}
+
         self.model.grid.move_agent(self, (x, y))
         self.battery -= 2
         if self.battery <= 0:

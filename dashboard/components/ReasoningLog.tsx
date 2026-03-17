@@ -8,6 +8,7 @@ const LOG_COLOR: Record<LogType, string> = {
   tool_call: 'text-green-600',
   result: 'text-gray-500',
   triage: 'text-purple-600',
+  narrative: 'text-amber-600',
   system: 'text-cyan-600',
   warning: 'text-orange-600',
   error: 'text-red-600',
@@ -18,6 +19,7 @@ const LOG_TAG: Record<LogType, string> = {
   tool_call: '[TOOL]',
   result: '[RES]',
   triage: '[TRIAGE]',
+  narrative: '[NARR]',
   system: '[SYS]',
   warning: '[WARN]',
   error: '[ERR]',
@@ -99,7 +101,7 @@ export default function ReasoningLog({ logs, voiceEnabled = false }: ReasoningLo
     prevLogCountRef.current = logs.length;
 
     for (const entry of newEntries) {
-      if (entry.is_critical && ['reasoning', 'triage', 'system'].includes(entry.type)) {
+      if (entry.is_critical && ['reasoning', 'triage', 'narrative', 'system'].includes(entry.type)) {
         try {
           const utterance = new SpeechSynthesisUtterance(cleanForSpeech(entry.message));
           utterance.rate = 1.1;
@@ -180,7 +182,7 @@ export default function ReasoningLog({ logs, voiceEnabled = false }: ReasoningLo
             >
               {entry.message}
             </span>
-            {voiceEnabled && entry.is_critical && ['reasoning', 'triage', 'system'].includes(entry.type) && (
+            {voiceEnabled && entry.is_critical && ['reasoning', 'triage', 'narrative', 'system'].includes(entry.type) && (
               <span className="ml-1.5 text-[8px] px-1 py-0.5 rounded bg-yellow-100 text-yellow-700 border border-yellow-200 font-medium">NARR</span>
             )}
           </div>

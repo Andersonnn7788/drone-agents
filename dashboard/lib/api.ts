@@ -11,6 +11,7 @@ export type LogType =
   | 'tool_call'
   | 'result'
   | 'triage'
+  | 'narrative'
   | 'system'
   | 'warning'
   | 'error';
@@ -49,7 +50,7 @@ export interface BlackoutZone {
 }
 
 export interface DisasterEvent {
-  type: 'aftershock' | 'rising_water' | 'blackout';
+  type: 'aftershock' | 'rising_water' | 'blackout' | 'blackout_cleared';
   step: number;
   center?: [number, number];
   affected_cells?: [number, number][];
