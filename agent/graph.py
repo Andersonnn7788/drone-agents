@@ -1,5 +1,6 @@
 """LangGraph StateGraph factory — builds the agent + tool-calling loop."""
 
+import asyncio
 import os
 import re
 import time
@@ -7,7 +8,6 @@ import time
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, AIMessage, ToolMessage
 from langgraph.graph import StateGraph, MessagesState, START, END
-from langgraph.prebuilt import ToolNode
 
 from simulation.state import get_model
 from .prompts import SYSTEM_PROMPT
@@ -92,6 +92,35 @@ def _summarize_tool_result(tool_name: str, raw_content_blocks: list) -> str | No
         if tool_name == "get_battery_status":
             text = " | ".join(p.strip() for p in parts[:5])
             return f"Battery: {text[:200]}"
+
+        if tool_name == "move_to":
+            import json as _json
+            for p in parts:
+                try:
+                    data = _json.loads(p)
+                    if isinstance(data, dict):
+                        ok = data.get("success", False)
+                        pos = data.get("position", "?")
+                        batt = data.get("battery", "?")
+                        if ok:
+                            return f"Moved to {pos}, battery={batt}"
+                        return f"Move failed: {data.get('reason', '?')}"
+                except (ValueError, TypeError):
+                    pass
+            return f"move_to: {parts[0][:100]}" if parts else None
+
+        if tool_name == "coordinate_swarm":
+            import json as _json
+            for p in parts:
+                try:
+                    data = _json.loads(p)
+                    if isinstance(data, dict) and data.get("assignments"):
+                        assigns = data["assignments"]
+                        summary = ", ".join(f"{k}→{v}" for k, v in assigns.items())
+                        return f"Sectors: {summary}"
+                except (ValueError, TypeError):
+                    pass
+            return f"Swarm: {parts[0][:150]}" if parts else None
 
     except Exception:
         return None
@@ -336,6 +365,47 @@ def _log_to_model(message: str, msg_type: str = "system", is_critical: bool = Fa
     })
 
 
+def _check_new_disasters(prev_count: int) -> list:
+    """Check for disasters that occurred since prev_count and emit narrative logs.
+
+    Returns the list of new disaster events (may be empty).
+    """
+    model = get_model()
+    new_events = model.disaster_events[prev_count:]
+    for event in new_events:
+        etype = event.get("type", "unknown")
+        if etype == "aftershock":
+            center = event.get("center", "?")
+            cells = event.get("affected_cells", [])
+            _log_to_model(
+                f"⚠ AFTERSHOCK at ({center[0]},{center[1]}) — {len(cells)} cells converted to DEBRIS. Reroute drones!",
+                msg_type="narrative",
+                is_critical=True,
+            )
+        elif etype == "rising_water":
+            flooded = event.get("flooded_cells", [])
+            _log_to_model(
+                f"⚠ RISING WATER — {len(flooded)} cells flooded. Check for survivors in danger!",
+                msg_type="narrative",
+                is_critical=True,
+            )
+        elif etype == "blackout":
+            center = event.get("center", "?")
+            radius = event.get("radius", "?")
+            _log_to_model(
+                f"⚠ BLACKOUT at ({center[0]},{center[1]}) radius {radius} — affected drones switching to autonomous mode.",
+                msg_type="narrative",
+                is_critical=True,
+            )
+        elif etype == "blackout_cleared":
+            _log_to_model(
+                "✓ Blackout cleared — call sync_findings() to recover buffered data.",
+                msg_type="narrative",
+                is_critical=True,
+            )
+    return new_events
+
+
 def _trim_messages(messages: list, window: int) -> list:
     """Trim messages to window size while preserving tool call/result pairs."""
     if window <= 0 or len(messages) <= window + 1:
@@ -376,10 +446,11 @@ def build_graph(tools: list):
     """Build and compile the LangGraph agent with the given MCP tools."""
 
     model_name = os.environ.get("LLM_MODEL", "gpt-5-mini")
-    llm = ChatOpenAI(model=model_name, temperature=0.1)
+    max_tok = int(os.environ.get("LLM_MAX_TOKENS", "4096"))
+    llm = ChatOpenAI(model=model_name, temperature=0.1, max_tokens=max_tok)
     llm_with_tools = llm.bind_tools(tools)
 
-    tool_node = ToolNode(tools)
+    tools_by_name = {tool.name: tool for tool in tools}
 
     # Message window size (0 = disabled)
     msg_window = int(os.environ.get("MSG_WINDOW_SIZE", "0"))
@@ -390,8 +461,8 @@ def build_graph(tools: list):
     # Demo mode flag
     demo_mode = os.environ.get("DEMO_MODE", "0") == "1"
 
-    # Minimum steps in demo mode — must run past all scripted events (last at step 11)
-    MIN_DEMO_STEPS = 13
+    # Minimum steps in demo mode — must run past all scripted events (last at step 7)
+    MIN_DEMO_STEPS = 8
 
     # Select prompt
     if demo_mode:
@@ -410,15 +481,23 @@ def build_graph(tools: list):
         # Sliding window: keep system prompt + last N messages (preserving tool pairs)
         messages = _trim_messages(messages, msg_window)
 
-        # Count advance_simulation calls to enforce step limit
-        advance_count = 0
-        for msg in messages:
-            if isinstance(msg, AIMessage) and msg.tool_calls:
-                for tc in msg.tool_calls:
-                    if tc.get("name") == "advance_simulation":
-                        advance_count += 1
+        # Filter stale nudge SystemMessages — keep only the most recent one
+        # Nudge messages start with "CONTINUE OPERATING" or "DO NOT STOP"
+        nudge_indices = [
+            i for i, m in enumerate(messages)
+            if isinstance(m, SystemMessage)
+            and i > 0  # never touch the system prompt at index 0
+            and (m.content.startswith("CONTINUE OPERATING")
+                 or m.content.startswith("DO NOT STOP"))
+        ]
+        if len(nudge_indices) > 1:
+            # Remove all but the last nudge message
+            stale = set(nudge_indices[:-1])
+            messages = [m for i, m in enumerate(messages) if i not in stale]
 
-        if advance_count >= max_steps:
+        # Enforce step limit using actual simulation step counter
+        model = get_model()
+        if model.mission_step >= max_steps:
             messages.append(SystemMessage(
                 content=(
                     f"MISSION STEP LIMIT REACHED ({max_steps} steps). You MUST wrap up now. "
@@ -448,44 +527,112 @@ def build_graph(tools: list):
         return {"messages": [response]}
 
     async def tools_with_logging(state: MessagesState):
-        result = await tool_node.ainvoke(state)
+        """Execute tool calls sequentially with pacing so SSE can broadcast
+        intermediate drone positions (prevents the 'teleport' effect)."""
+        last_ai_msg = state["messages"][-1]
+        if not hasattr(last_ai_msg, "tool_calls") or not last_ai_msg.tool_calls:
+            return {"messages": []}
 
-        # Log tool results with smart summarization
-        for msg in result.get("messages", []):
-            if isinstance(msg, ToolMessage):
-                raw = msg.content
-                raw_blocks = raw if isinstance(raw, list) else [raw]
+        results = []
+        for tc in last_ai_msg.tool_calls:
+            tool = tools_by_name.get(tc["name"])
 
-                # Try smart summary first
-                summary = _summarize_tool_result(msg.name, raw_blocks)
-                if summary:
-                    content = summary
-                else:
-                    # Fallback: extract text and truncate
-                    if isinstance(raw, list):
-                        parts = []
-                        for block in raw:
-                            if isinstance(block, dict) and "text" in block:
-                                parts.append(block["text"])
-                        content = "\n".join(parts) if parts else str(raw)
-                    else:
-                        content = str(raw)
-                    if len(content) > 300:
-                        content = content[:300] + "..."
+            # Track disaster count before advance_simulation so we can detect new events
+            pre_advance_disaster_count = None
+            if tc["name"] == "advance_simulation":
+                pre_advance_disaster_count = len(get_model().disaster_events)
 
-                # Emit narrative entries for key events; skip raw result if narrative was emitted
-                narrated = _emit_narrative(msg.name, raw_blocks)
-                if not narrated:
-                    _log_to_model(
-                        f"Result [{msg.name}]: {content}",
-                        msg_type="result",
+            if tool is None:
+                msg = ToolMessage(
+                    content=f"Error: tool '{tc['name']}' not found",
+                    tool_call_id=tc["id"],
+                    name=tc["name"],
+                )
+            else:
+                try:
+                    result = await tool.ainvoke(tc["args"])
+                    msg = ToolMessage(
+                        content=result,
+                        tool_call_id=tc["id"],
+                        name=tc["name"],
+                    )
+                except Exception as e:
+                    msg = ToolMessage(
+                        content=f"Error: {e}",
+                        tool_call_id=tc["id"],
+                        name=tc["name"],
                     )
 
-        return result
+            results.append(msg)
+
+            # Log tool result with smart summarization
+            raw = msg.content
+            raw_blocks = raw if isinstance(raw, list) else [raw]
+
+            summary = _summarize_tool_result(msg.name, raw_blocks)
+            if summary:
+                content = summary
+            else:
+                if isinstance(raw, list):
+                    parts = []
+                    for block in raw:
+                        if isinstance(block, dict) and "text" in block:
+                            parts.append(block["text"])
+                    content = "\n".join(parts) if parts else str(raw)
+                else:
+                    content = str(raw)
+                if len(content) > 300:
+                    content = content[:300] + "..."
+
+            narrated = _emit_narrative(msg.name, raw_blocks)
+            if not narrated:
+                _log_to_model(
+                    f"Result [{msg.name}]: {content}",
+                    msg_type="result",
+                )
+
+            # Check for new disasters after explicit advance_simulation
+            if pre_advance_disaster_count is not None:
+                new_disasters = _check_new_disasters(pre_advance_disaster_count)
+                if new_disasters:
+                    disaster_desc = "; ".join(
+                        f"{e['type']} at step {e.get('step', '?')}" for e in new_disasters
+                    )
+                    results.append(SystemMessage(content=(
+                        f"⚠ DISASTER ALERT: {disaster_desc}. "
+                        "Check affected areas, reroute drones if needed, and report status."
+                    )))
+
+            # Pace move_to calls so SSE can broadcast intermediate positions
+            if tc["name"] == "move_to":
+                await asyncio.sleep(0.25)
+
+        # Auto-advance simulation if batch had actions but no explicit advance
+        tool_names_in_batch = {tc["name"] for tc in last_ai_msg.tool_calls}
+        has_action = tool_names_in_batch & {"move_to", "thermal_scan", "rescue_survivor"}
+        has_advance = "advance_simulation" in tool_names_in_batch
+        if has_action and not has_advance:
+            sim_model = get_model()
+            prev_disaster_count = len(sim_model.disaster_events)
+            sim_model.step()
+            _log_to_model(f"Auto-step → step {sim_model.mission_step}", msg_type="system")
+            new_disasters = _check_new_disasters(prev_disaster_count)
+            if new_disasters:
+                disaster_desc = "; ".join(
+                    f"{e['type']} at step {e.get('step', '?')}" for e in new_disasters
+                )
+                results.append(SystemMessage(content=(
+                    f"⚠ DISASTER ALERT: {disaster_desc}. "
+                    "Check affected areas, reroute drones if needed, and report status."
+                )))
+
+        return {"messages": results}
 
     # Track nudge count to prevent infinite loops
-    nudge_count = {"n": 0}
+    # n = consecutive nudges, total = total nudges this step, step = last seen step
+    nudge_count = {"n": 0, "total": 0, "step": 0}
     MAX_NUDGES = 3
+    MAX_TOTAL_NUDGES = 6
 
     def should_continue(state: MessagesState):
         """Custom routing: detects premature stops and nudges the agent back."""
@@ -494,10 +641,16 @@ def build_graph(tools: list):
         # If LLM made tool calls, proceed normally (execute tools)
         if hasattr(last_msg, "tool_calls") and last_msg.tool_calls:
             nudge_count["n"] = 0  # Reset on successful tool use
+            nudge_count["total"] = 0
             return "tools"
 
         # LLM stopped calling tools — check if mission is actually complete
         model = get_model()
+
+        # Reset total counter when simulation advances to a new step
+        if model.mission_step != nudge_count["step"]:
+            nudge_count["total"] = 0
+            nudge_count["step"] = model.mission_step
 
         # Mission step limit reached
         if model.mission_step >= max_steps:
@@ -506,8 +659,23 @@ def build_graph(tools: list):
         # In demo mode, don't allow early exit before scripted events have fired
         if demo_mode and model.mission_step < MIN_DEMO_STEPS:
             nudge_count["n"] += 1
+            nudge_count["total"] += 1
             if nudge_count["n"] >= MAX_NUDGES:
-                nudge_count["n"] = 0  # Reset — keep trying in demo mode
+                nudge_count["n"] = 0  # Reset consecutive counter
+
+            # Hard cap: if total nudges exceeded, force-advance the simulation
+            if nudge_count["total"] >= MAX_TOTAL_NUDGES:
+                _log_to_model(
+                    f"Agent unresponsive after {MAX_TOTAL_NUDGES} nudges at step "
+                    f"{model.mission_step} — force-advancing simulation.",
+                    msg_type="system",
+                    is_critical=True,
+                )
+                model.step()
+                nudge_count["n"] = 0
+                nudge_count["total"] = 0
+                nudge_count["step"] = model.mission_step
+
             _log_to_model(
                 f"Continuing mission — step {model.mission_step}/{MIN_DEMO_STEPS}.",
                 msg_type="system",

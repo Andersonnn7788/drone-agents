@@ -81,6 +81,7 @@ export interface MissionCompleteData {
 
 export interface SimState {
   mission_step: number;
+  base_position?: [number, number];
   terrain: TerrainType[][];
   drones: Record<string, DroneState>;
   survivors: SurvivorState[];

@@ -1,7 +1,8 @@
-"""FastMCP server — 17 @mcp.tool() definitions wrapping the drone swarm simulation."""
+"""FastMCP server — 18 @mcp.tool() definitions wrapping the drone swarm simulation."""
 
 from mcp.server.fastmcp import FastMCP
 from simulation.state import get_model
+from simulation.model import BASE_POS
 from simulation.mesh_network import sync_drone, get_network_resilience as _get_network_resilience
 
 mcp = FastMCP("DroneSwarm", host="0.0.0.0", port=8000)
@@ -35,6 +36,8 @@ def move_to(drone_id: str, x: int, y: int) -> dict:
     drone, err = _get_drone(drone_id)
     if err:
         return err
+    if not drone.connected:
+        return {"error": f"Drone '{drone_id}' is disconnected (blackout). Cannot command — it is operating autonomously."}
     return drone.move_to(x, y)
 
 
@@ -46,6 +49,8 @@ def thermal_scan(drone_id: str) -> dict:
     drone, err = _get_drone(drone_id)
     if err:
         return err
+    if not drone.connected:
+        return {"error": f"Drone '{drone_id}' is disconnected (blackout). Cannot command — it is operating autonomously."}
     return drone.thermal_scan()
 
 
@@ -122,11 +127,13 @@ def trigger_blackout(zone_x: int, zone_y: int, radius: int) -> dict:
 
 @mcp.tool()
 def recall_drone(drone_id: str) -> dict:
-    """Order a drone to return to base station at (0,0) for recharging.
+    """Order a drone to return to base station at (6,5) for recharging.
     The drone will pathfind back autonomously each simulation step."""
     drone, err = _get_drone(drone_id)
     if err:
         return err
+    if not drone.connected:
+        return {"error": f"Drone '{drone_id}' is disconnected (blackout). Cannot command — it is operating autonomously."}
     return drone.return_to_base()
 
 
@@ -210,6 +217,8 @@ def rescue_survivor(drone_id: str, survivor_id: int) -> dict:
     if target is None:
         return {"error": f"Unknown survivor_id {survivor_id}. Check discovered survivors first."}
 
+    if not drone.connected:
+        return {"error": f"Drone '{drone_id}' is disconnected (blackout). Cannot command — it is operating autonomously."}
     return drone.rescue_survivor(target)
 
 
@@ -312,6 +321,8 @@ def deploy_as_relay(drone_id: str) -> dict:
     drone, err = _get_drone(drone_id)
     if err:
         return err
+    if not drone.connected:
+        return {"error": f"Drone '{drone_id}' is disconnected (blackout). Cannot command — it is operating autonomously."}
     return drone.deploy_as_relay()
 
 
@@ -322,7 +333,7 @@ def get_network_resilience() -> dict:
     coverage_gaps (grid cells not reachable by any drone), and relay_suggestions.
     Use this to decide whether to deploy relay nodes or reposition drones."""
     model = get_model()
-    return _get_network_resilience(model.drones)
+    return _get_network_resilience(model.drones, base_pos=BASE_POS)
 
 
 @mcp.tool()

@@ -173,54 +173,56 @@ export default function Page() {
         </div>
       </header>
 
-      {/* 4-panel grid */}
-      <div className="flex-1 grid grid-cols-[1fr_280px] grid-rows-2 gap-2 min-h-0">
-        <GridMap state={displayState} gridEffect={gridEffect} />
-
-        {/* Right column top: Fleet / Mesh tabs */}
-        <div className="bg-white rounded border border-gray-200 shadow-sm p-2 flex flex-col min-h-0">
-          <div className="flex gap-1 mb-2 flex-shrink-0">
-            <button
-              onClick={() => setRightTab('fleet')}
-              className={`flex-1 py-1 text-[10px] font-semibold uppercase tracking-wider rounded transition-colors ${
-                rightTab === 'fleet'
-                  ? 'bg-cyan-50 text-cyan-700 border border-cyan-200'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Fleet
-            </button>
-            <button
-              onClick={() => setRightTab('mesh')}
-              className={`flex-1 py-1 text-[10px] font-semibold uppercase tracking-wider rounded transition-colors ${
-                rightTab === 'mesh'
-                  ? 'bg-cyan-50 text-cyan-700 border border-cyan-200'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              Mesh
-            </button>
-          </div>
-          <div className="flex-1 min-h-0 overflow-y-auto">
-            {rightTab === 'fleet' ? (
-              <DronePanel state={displayState} />
-            ) : (
-              <MeshGraph state={displayState} />
-            )}
-          </div>
-        </div>
+      {/* 3-column grid: GridMap | ReasoningLog | Right sidebar */}
+      <div className="flex-1 grid grid-cols-[1fr_1fr_260px] gap-2 min-h-0">
+        <GridMap state={displayState} gridEffect={gridEffect} isReplaying={replayStep !== null} />
 
         <ReasoningLog logs={displayLogs} voiceEnabled={voiceEnabled} />
-        <ControlPanel
-          state={displayState}
-          missionRunning={missionRunning}
-          voiceEnabled={voiceEnabled}
-          onVoiceToggle={() => setVoiceEnabled((v) => !v)}
-          onStart={handleStart}
-          onStep={handleStep}
-          onBlackout={handleBlackout}
-          onReset={handleReset}
-        />
+
+        {/* Right column: Fleet/Mesh tabs + Controls stacked */}
+        <div className="flex flex-col gap-2 min-h-0">
+          <div className="bg-white rounded border border-gray-200 shadow-sm p-2 flex flex-col min-h-0 flex-1">
+            <div className="flex gap-1 mb-2 flex-shrink-0">
+              <button
+                onClick={() => setRightTab('fleet')}
+                className={`flex-1 py-1 text-[10px] font-semibold uppercase tracking-wider rounded transition-colors ${
+                  rightTab === 'fleet'
+                    ? 'bg-cyan-50 text-cyan-700 border border-cyan-200'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Fleet
+              </button>
+              <button
+                onClick={() => setRightTab('mesh')}
+                className={`flex-1 py-1 text-[10px] font-semibold uppercase tracking-wider rounded transition-colors ${
+                  rightTab === 'mesh'
+                    ? 'bg-cyan-50 text-cyan-700 border border-cyan-200'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Mesh
+              </button>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              {rightTab === 'fleet' ? (
+                <DronePanel state={displayState} />
+              ) : (
+                <MeshGraph state={displayState} />
+              )}
+            </div>
+          </div>
+          <ControlPanel
+            state={displayState}
+            missionRunning={missionRunning}
+            voiceEnabled={voiceEnabled}
+            onVoiceToggle={() => setVoiceEnabled((v) => !v)}
+            onStart={handleStart}
+            onStep={handleStep}
+            onBlackout={handleBlackout}
+            onReset={handleReset}
+          />
+        </div>
       </div>
 
       {/* Timeline slider */}

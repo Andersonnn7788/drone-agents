@@ -109,11 +109,32 @@ export default function MeshGraph({ state }: MeshGraphProps) {
   }
 
   // Node positions
+  const baseGrid = state.base_position ?? [6, 5];
   const nodePos: Record<string, [number, number]> = {
-    base: gridToSvg(0, 0),
+    base: gridToSvg(baseGrid[0], baseGrid[1]),
   };
   for (const [id, drone] of droneEntries) {
     nodePos[id] = gridToSvg(drone.position[0], drone.position[1]);
+  }
+
+  // Spread overlapping nodes so all are visible
+  const posGroups: Record<string, string[]> = {};
+  for (const [id, pos] of Object.entries(nodePos)) {
+    const key = `${pos[0]},${pos[1]}`;
+    if (!posGroups[key]) posGroups[key] = [];
+    posGroups[key].push(id);
+  }
+  for (const ids of Object.values(posGroups)) {
+    if (ids.length <= 1) continue;
+    const [cx, cy] = nodePos[ids[0]];
+    const spread = 12;
+    const angleStep = (2 * Math.PI) / ids.length;
+    ids.forEach((id, i) => {
+      nodePos[id] = [
+        cx + spread * Math.cos(angleStep * i - Math.PI / 2),
+        cy + spread * Math.sin(angleStep * i - Math.PI / 2),
+      ];
+    });
   }
 
   const connColor =
@@ -197,18 +218,18 @@ export default function MeshGraph({ state }: MeshGraphProps) {
               <circle
                 cx={cx}
                 cy={cy}
-                r={isRelay ? 7 : 5}
+                r={isRelay ? 9 : 8}
                 fill={color}
                 stroke={isDisconnected ? '#ef4444' : 'rgba(0,0,0,0.2)'}
                 strokeWidth={isDisconnected ? 2 : 1}
                 opacity={0.9}
               />
-              {/* Label */}
+              {/* Label — centered inside the circle */}
               <text
                 x={cx}
-                y={cy + (isRelay ? 15 : 13)}
+                y={cy + 3.5}
                 textAnchor="middle"
-                fill="#374151"
+                fill="#1e293b"
                 fontSize="8"
                 fontWeight="bold"
               >

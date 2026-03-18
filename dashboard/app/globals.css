@@ -64,6 +64,24 @@
   border-radius: 2px;
 }
 
+/* Survivor alive pulse — gentle scale breath */
+@keyframes survivor-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(1.07); }
+}
+.survivor-pulse {
+  animation: survivor-pulse 2s ease-in-out infinite;
+}
+
+/* Critical survivor pulse — urgent, faster */
+@keyframes survivor-critical-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.9; transform: scale(1.18); }
+}
+.survivor-critical-pulse {
+  animation: survivor-critical-pulse 0.9s ease-in-out infinite;
+}
+
 /* Aftershock shake — grid container jitters on aftershock events */
 @keyframes aftershock-shake {
   0%, 100% { transform: translate(0, 0); }

@@ -56,7 +56,7 @@ project-root/
 │   └── mesh_network.py   # Mesh topology, blackout, relay, resilience analysis
 ├── mcp_server/
 │   ├── __init__.py
-│   └── server.py         # FastMCP server — 17 @mcp.tool() definitions
+│   └── server.py         # FastMCP server — 18 @mcp.tool() definitions
 ├── agent/
 │   ├── __init__.py
 │   ├── graph.py          # LangGraph StateGraph (MessagesState)
@@ -164,9 +164,9 @@ When multiple survivors found, agent reasons through priority:
 
 Survivor health drain: CRITICAL=0.05/step (~20 steps), MODERATE=0.02/step (~50), STABLE=0.01/step (~100).
 
-## MCP Tools (17 total)
+## MCP Tools (18 total)
 
-**Core (11):** `discover_drones`, `move_to`, `thermal_scan`, `get_battery_status`, `get_priority_map`, `simulate_mission`, `sync_findings`, `trigger_blackout`, `recall_drone`, `get_mission_summary`, `advance_simulation`
+**Core (12):** `discover_drones`, `move_to`, `thermal_scan`, `get_battery_status`, `get_priority_map`, `simulate_mission`, `sync_findings`, `trigger_blackout`, `recall_drone`, `get_mission_summary`, `advance_simulation`, `rescue_survivor`
 
 **Innovation (6):** `get_pheromone_map`, `get_disaster_events`, `assess_survivor`, `deploy_as_relay`, `get_network_resilience`, `coordinate_swarm`
 
@@ -182,6 +182,8 @@ Survivor health drain: CRITICAL=0.05/step (~20 steps), MODERATE=0.02/step (~50),
 | POST | `/api/start` | Begin autonomous agent mission |
 | POST | `/api/step` | Manually advance simulation N steps |
 | POST | `/api/blackout` | Trigger blackout event `{zone_x, zone_y, radius}` |
+| GET | `/api/health` | Health check with mission status |
+| POST | `/api/reset` | Reset simulation to fresh state |
 
 ## Development Notes
 
@@ -190,5 +192,5 @@ Survivor health drain: CRITICAL=0.05/step (~20 steps), MODERATE=0.02/step (~50),
 - SSE is the primary data transport to the frontend; REST endpoints are fallback
 - State snapshots are recorded each step for the timeline replay feature
 - Voice narration uses browser `SpeechSynthesis` API — only reads `is_critical: true` log entries
-- Grid is 12x12, `torus=False`. Base station at `(0,0)`
-- Drones start at `(0,0)`. Battery: 100, costs 1/step, 2/move, 3/scan
+- Grid is 12x12, `torus=False`. Base station at `(6,5)`
+- Drones start at `(6,5)`. Battery: 100, costs 1/step, 2/move, 3/scan

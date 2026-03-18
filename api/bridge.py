@@ -56,6 +56,7 @@ async def _sse_generator():
     last_log_count = 0
     last_disaster_count = 0
     last_drone_hash = ""
+    last_survivor_hash = ""
 
     # Send initial state immediately
     model = get_model()
@@ -79,8 +80,14 @@ async def _sse_generator():
         if drone_moved:
             last_drone_hash = drone_hash
 
-        # Check for new simulation steps
-        if model.mission_step != last_step or drone_moved:
+        # Check for survivor state changes (found/rescued/alive from MCP tools)
+        survivor_hash = str([(s.unique_id, s.found, s.rescued, s.alive) for s in model.survivors])
+        survivor_changed = survivor_hash != last_survivor_hash
+        if survivor_changed:
+            last_survivor_hash = survivor_hash
+
+        # Check for new simulation steps or state changes
+        if model.mission_step != last_step or drone_moved or survivor_changed:
             last_step = model.mission_step
             yield f"event: state\ndata: {json.dumps(model.get_state())}\n\n"
 

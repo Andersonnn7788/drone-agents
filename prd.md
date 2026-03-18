@@ -19,7 +19,7 @@ What makes this system genuinely decentralised: drones are **not puppets**. The 
 | MCP Server | **FastMCP** (from `mcp` Python SDK) | Exposes drone tools over Streamable HTTP at `http://localhost:8000/mcp` |
 | Agent Brain | **LangChain + LangGraph** + `langchain-mcp-adapters` | LLM-powered Command Agent with chain-of-thought reasoning |
 | LLM Provider | **OpenAI GPT-5 mini** (`gpt-5-mini`) via `langchain-openai` |
-| Frontend Dashboard | **Next.js 14+ (App Router)** + React + TypeScript + Tailwind CSS | Real-time visualization via SSE streaming |
+| Frontend Dashboard | **Next.js 16 (App Router)** + React + TypeScript + Tailwind CSS | Real-time visualization via SSE streaming |
 | API Bridge | **FastAPI** | SSE streaming endpoint + REST endpoints for frontend |
 
 ### Python Dependencies
@@ -56,10 +56,10 @@ npx create-next-app@latest dashboard --typescript --tailwind --app --eslint
                ▼                             ▼
 ┌──────────────────────┐         ┌──────────────────────────────────┐
 │   LangGraph Agent    │◄───────►│      MCP Server (FastMCP)        │
-│   (Command Agent)    │  MCP    │  17 Tools: discover, move, scan, │
+│   (Command Agent)    │  MCP    │  18 Tools: discover, move, scan, │
 │   Strategic Reasoning│  HTTP   │  battery, heatmap, simulate,     │
-│   + Triage Decisions │         │  pheromones, triage, swarm,      │
-│                      │         │  relay, resilience, disaster...  │
+│   + Triage Decisions │         │  rescue, pheromones, triage,     │
+│                      │         │  swarm, relay, resilience...     │
 └──────────────────────┘         └──────────────┬───────────────────┘
                                                 │ direct Python calls
                                                 ▼
@@ -123,17 +123,19 @@ project-root/
 │   ├── __init__.py
 │   ├── model.py              # Mesa DisasterModel (grid, survivors, heatmap, pheromones, disasters)
 │   ├── agents.py             # DroneAgent (with local autonomy), SurvivorAgent (health decay)
-│   └── mesh_network.py       # Communication range + blackout logic
+│   ├── mesh_network.py       # Communication range + blackout logic
+│   └── state.py              # Singleton model instance
 │
 ├── mcp_server/
 │   ├── __init__.py
-│   └── server.py             # FastMCP server with all 17 @mcp.tool() definitions
+│   └── server.py             # FastMCP server with all 18 @mcp.tool() definitions
 │
 ├── agent/
 │   ├── __init__.py
-│   ├── graph.py              # LangGraph StateGraph definition
-│   ├── prompts.py            # System prompt for Command Agent (with triage rules)
-│   └── runner.py             # Entry point: connects to MCP, runs agent loop
+│   ├── graph.py              # LangGraph StateGraph (3 nodes: agent, tools, nudge)
+│   ├── prompts.py            # System prompt + demo prompt for Command Agent (with triage rules)
+│   ├── runner.py             # Entry point: daemon threads for MCP + API bridge, waits for dashboard Start
+│   └── shared.py             # Shared state (start trigger, mission complete flag)
 │
 ├── api/
 │   ├── __init__.py
@@ -172,8 +174,8 @@ project-root/
 **Class: `DisasterModel(mesa.Model)`**
 
 - **Grid:** `mesa.spaces.MultiGrid(width=12, height=12, torus=False)`
-- **Survivors:** 8–12 randomly placed, hidden from drones until scanned. Each survivor has `found`, `rescued`, `health`, and `severity` properties.
-- **Drones:** 4–5 `DroneAgent` instances, start at base position `(0, 0)`.
+- **Survivors:** Configurable via `NUM_SURVIVORS` (default 8; demo uses 4), randomly placed, hidden from drones until scanned. Each survivor has `found`, `rescued`, `health`, and `severity` properties.
+- **Drones:** 4–5 `DroneAgent` instances, start at base position `(6, 5)`.
 - **Terrain types:** Store as a separate grid — `BUILDING`, `ROAD`, `OPEN`, `WATER`, `DEBRIS`. Water and Debris cells are impassable (Debris can be created by aftershocks).
 
 #### Bayesian Heatmap (PropertyLayer)
@@ -181,6 +183,8 @@ A `numpy` 12x12 array representing Bayesian prior probability of survivor presen
 - Cells near "buildings" (predefined coordinates): prior = 0.7
 - Cells near "roads" (predefined row/column): prior = 0.5
 - Open terrain: prior = 0.3
+- Water terrain: prior = 0.1
+- Debris terrain: prior = 0.1
 
 #### Pheromone Layers (Innovation 2: Stigmergy)
 
@@ -205,8 +209,8 @@ Pheromone deposit rules:
 1. Drains 1 battery from all active drones
 2. Decays all pheromone layers by 0.9x
 3. Drains survivor health based on severity level
-4. Every ~10 steps: **Aftershock event** — 2-3 random `OPEN` cells become `DEBRIS` (impassable). If a drone is on an affected cell, it takes 5 battery damage and must relocate.
-5. Every ~15 steps: **Rising water** — all `WATER` cells expand by 1 cell in a random direction. If water reaches a survivor, they are lost immediately.
+4. ~10% chance per step after step 8: **Aftershock event** — 2-3 random `OPEN` cells become `DEBRIS` (impassable).
+5. ~7% chance per step after step 12: **Rising water** — all `WATER` cells expand by 1 cell in a random direction. If water reaches a survivor, they are lost immediately.
 6. Record state snapshot for mission replay history
 
 **Disaster event log:** The model maintains a `disaster_events: list[dict]` recording all aftershocks and water expansions with step number, affected cells, and consequences (e.g., "Survivor at (7,3) lost to rising water").
@@ -221,7 +225,7 @@ Properties:
 - `drone_id: str` — unique identifier (e.g., "drone_alpha", "drone_bravo")
 - `position: tuple[int, int]` — current (x, y) on grid
 - `battery: int` — starts at 100, drains 1 per step, 2 per move, 3 per scan
-- `status: str` — one of `"active"`, `"returning"`, `"charging"`, `"offline"`, `"relay"`
+- `status: str` — one of `"active"`, `"returning"`, `"charging"`, `"dead"`, `"relay"`
 - `connected: bool` — whether drone can communicate with command
 - `comm_range: int` — default 4 cells; drones within range of each other can relay
 - `findings_buffer: list[dict]` — stores scan results when disconnected
@@ -232,8 +236,9 @@ Properties:
 Methods:
 - `move_to(x, y)` — update position, drain battery by 2
 - `thermal_scan()` — check for survivors in scan_radius, return results, drain battery by 3
-- `return_to_base()` — set status to "returning", pathfind to (0,0)
-- `charge()` — if at base, increment battery by 10 per step until 100
+- `return_to_base()` — set status to "returning", pathfind to (6,5)
+- `charge()` — if at base, increment battery by 10 per step (15 in demo mode) until 100
+- `rescue_survivor(survivor)` — mark a found survivor on the same cell as rescued
 - `deploy_as_relay()` — set `is_relay = True`, `status = "relay"`, drone becomes stationary comm node
 
 #### Local Autonomy Methods (Innovation 1: Two-Tier Intelligence)
@@ -273,7 +278,7 @@ Severity drain rates (per step):
 Step logic:
 ```python
 def step(self):
-    if not self.alive:
+    if not self.alive or self.rescued:
         return
     drain = {"CRITICAL": 0.05, "MODERATE": 0.02, "STABLE": 0.01}[self.severity]
     self.health = max(0.0, self.health - drain)
@@ -289,7 +294,7 @@ When a survivor dies, it's a **permanent failure** — the mission score drops. 
 ### File: `simulation/mesh_network.py`
 
 **Functions:**
-- `compute_mesh_topology(drones: list[DroneAgent]) -> dict[str, list[str]]` — returns adjacency list of which drones can communicate (within `comm_range` of each other). Relay drones (`is_relay=True`) count as nodes with extended range (6 cells instead of 4).
+- `compute_mesh_topology(drones, base_pos=(6, 5)) -> dict[str, list[str]]` — returns adjacency list of which drones can communicate (within `comm_range` of each other). Relay drones (`is_relay=True`) count as nodes with extended range (6 cells instead of 4).
 - `apply_blackout(model, zone_center: tuple, radius: int)` — sets `connected = False` for all drones within radius of zone_center
 - `check_relay_path(drone: DroneAgent, base: tuple, all_drones: list) -> bool` — BFS/DFS to check if drone has a relay path back to base through other connected drones
 - `sync_drone(drone: DroneAgent) -> list[dict]` — flush findings_buffer when connection is restored
@@ -306,7 +311,7 @@ Use `FastMCP` from the official `mcp` Python SDK. The server holds a reference t
 **Transport:** Streamable HTTP (`mcp.run(transport="streamable-http")`)
 **Default URL:** `http://localhost:8000/mcp`
 
-### Tools to Implement (17 Total)
+### Tools to Implement (18 Total)
 
 Each tool is a decorated function using `@mcp.tool()`:
 
@@ -330,8 +335,9 @@ Each tool is a decorated function using `@mcp.tool()`:
    - Deposits pheromones: `scanned` on all scanned cells, `survivor_nearby` if survivor found
    - If drone is disconnected, results go to findings_buffer instead of immediate return
 
-4. **`get_battery_status(drone_id: str) -> dict`**
-   - Returns: battery_level, estimated_moves_remaining, status, position, can_return_to_base (bool)
+4. **`get_battery_status(drone_id: str = None) -> dict | list[dict]`**
+   - Returns battery and status info for one drone (by ID) or all drones (if `drone_id` is None)
+   - Returns: battery_level, status, position
 
 #### Strategic Tools
 
@@ -358,7 +364,7 @@ Each tool is a decorated function using `@mcp.tool()`:
    - Used for demo purposes and to test self-healing
 
 9. **`recall_drone(drone_id: str) -> dict`**
-   - Commands drone to return to base (0,0) for charging
+   - Commands drone to return to base (6,5) for charging
    - Sets status to "returning"
    - Returns: estimated steps to reach base, current battery
 
@@ -369,42 +375,48 @@ Each tool is a decorated function using `@mcp.tool()`:
     - Advances the Mesa model by N steps (battery drain, charging, movement, health decay, pheromone decay, possible aftershock/water events)
     - Returns: updated fleet status, any drones that hit 0 battery, any disaster events that occurred, any survivors that died
 
+12. **`rescue_survivor(drone_id: str, survivor_id: int) -> dict`**
+    - Rescue a survivor at the drone's current position
+    - The drone must be on the same cell as the survivor; the survivor must be found (scanned), alive, and not already rescued
+    - Marks the survivor as rescued so their health stops draining
+    - Call this AFTER moving to a found survivor's cell
+
 #### Innovation Tools (6 new differentiators)
 
-12. **`get_pheromone_map() -> dict`**
+13. **`get_pheromone_map() -> dict`**
     - Returns all three pheromone layers as 12x12 2D arrays: `scanned`, `survivor_nearby`, `danger`
     - Also returns: suggested exploration targets (cells with low `scanned` + high heatmap probability)
     - The agent uses this for strategic planning; drones use it locally for autonomous navigation
 
-13. **`get_disaster_events() -> dict`**
-    - Returns the recent disaster event log: aftershocks (which cells became DEBRIS), rising water (which cells flooded), survivor casualties
-    - Includes: current terrain map reflecting all changes, predicted next event window
+14. **`get_disaster_events() -> list[dict]`**
+    - Returns the full list of disaster events that have occurred during the mission
+    - Events include aftershocks (which cells became DEBRIS), rising water (which cells flooded), and blackouts
     - Agent uses this to re-route drones away from danger and prioritize threatened survivors
 
-14. **`assess_survivor(drone_id: str) -> dict`**
-    - Returns triage assessment for the nearest found (but not rescued) survivor within scan range of specified drone
-    - Data: survivor position, health percentage, severity level, estimated steps until death, distance from drone, rescue priority score
-    - Priority score formula: `priority = (1.0 - health) * severity_weight * (1.0 / distance)` where CRITICAL=3, MODERATE=2, STABLE=1
-    - Returns null if no found survivors are nearby
+15. **`assess_survivor(survivor_id: int) -> dict`**
+    - Returns triage assessment for a specific survivor by ID
+    - Data: survivor position, health percentage, severity level, estimated steps until death, triage level, recommendation
+    - Triage levels: IMMEDIATE (critical+health<30%), URGENT (critical+30-60%), MEDIUM-HIGH (moderate+health<40%), LOW (stable)
     - This tool exists so the agent can do **explicit triage reasoning** in its chain-of-thought
 
-15. **`deploy_as_relay(drone_id: str, x: int, y: int) -> dict`**
-    - Moves specified drone to (x, y) and converts it to a stationary communication relay
+16. **`deploy_as_relay(drone_id: str) -> dict`**
+    - Converts the drone at its current position into a stationary communication relay
     - Sets `is_relay = True`, `status = "relay"`, `comm_range = 6` (extended)
-    - Returns: relay position, drones now within extended range, network improvement metrics
+    - Returns: relay position, network improvement metrics
     - Trade-off: sacrifices a searcher to improve network resilience — agent must reason about whether the network benefit outweighs losing a search drone
+    - WARNING: This is irreversible — the drone can no longer move or scan
 
-16. **`get_network_resilience() -> dict`**
+17. **`get_network_resilience() -> dict`**
     - Returns network analysis: connectivity ratio (connected/total drones), critical relay nodes, coverage gaps (grid quadrants with no comm coverage), single points of failure
     - Includes: recommended positions for relay deployment to maximize coverage
     - Agent uses this proactively before/after blackouts to assess swarm health
 
-17. **`coordinate_swarm(sector: str) -> dict`**
-    - Assigns all available drones to a sector-based search pattern
-    - Sector format: `"NW"`, `"NE"`, `"SW"`, `"SE"`, or `"ALL"`
-    - Divides the 12x12 grid into quadrants (6x6 each) and assigns `assigned_sector` to each drone
-    - Returns: drone-to-sector mapping, estimated coverage time, pheromone summary per sector
-    - Drones with `assigned_sector` will continue scanning that sector autonomously during blackouts
+18. **`coordinate_swarm(assignments: dict = None) -> dict`**
+    - Divide the grid into sectors and assign drones for efficient coverage
+    - If `assignments` provided: `{drone_id: [x, y, width, height]}` for manual sector assignment
+    - If no assignments: auto-divide the 12x12 grid into quadrants among active drones
+    - Returns: drone-to-sector mapping
+    - Drones with `assigned_sector` will prefer scanning within their assigned sector during autonomous navigation
 
 ---
 
@@ -422,7 +434,7 @@ Find and locate all survivors in the 12x12 grid disaster zone using your drone f
 1. ALWAYS call discover_drones() first to see your available fleet. Never assume drone IDs.
 2. ALWAYS explain your reasoning BEFORE executing any tool call. Use chain-of-thought.
 3. Use get_priority_map() and get_pheromone_map() to make data-driven decisions about where to scan next.
-4. Monitor battery levels — recall any drone below 20% battery to base (0,0).
+4. Monitor battery levels — recall any drone below 20% battery to base (6,5).
 5. If a drone is disconnected, do NOT send it commands. It will continue autonomously using pheromone gradients. Wait for reconnection or use sync_findings().
 6. Use simulate_mission() before committing to long-distance moves to verify feasibility.
 7. After each scan, reassess the heatmap and adjust your plan.
@@ -465,6 +477,9 @@ The disaster zone is ALIVE. Watch for:
 ## VICTORY CONDITION
 Mission succeeds when all LIVING survivors are located. Minimize steps, battery usage, and survivor casualties. Every death is a failure — but strategic triage means accepting some losses to save many.
 """
+
+# A separate DEMO_SYSTEM_PROMPT also exists — a condensed version optimized for demo mode
+# with explicit instructions to keep operating for 13+ steps to handle all scripted events.
 ```
 
 ### File: `agent/graph.py`
@@ -473,41 +488,49 @@ Build a LangGraph `StateGraph` with `MessagesState`:
 
 ```
 Nodes:
-  - "agent": calls the LLM with tools bound, uses SYSTEM_PROMPT
-  - "tools": ToolNode that executes MCP tool calls
+  - "agent": calls the LLM with tools bound, uses SYSTEM_PROMPT (or DEMO_SYSTEM_PROMPT)
+  - "tools": ToolNode that executes MCP tool calls (with smart summarization via _summarize_tool_result and narrative logging via _emit_narrative)
+  - "nudge": injects a system message to force the agent to keep acting when it stops prematurely
 
 Edges:
   - START -> "agent"
-  - "agent" -> tools_condition (if tool call) -> "tools"
-  - "agent" -> END (if no tool call, mission complete)
+  - "agent" -> should_continue (custom routing):
+    - tool calls present -> "tools"
+    - mission complete / step limit / max nudges -> END
+    - otherwise -> "nudge" (force continuation)
   - "tools" -> "agent" (loop back for next reasoning step)
+  - "nudge" -> "agent" (loop back to re-prompt the agent)
 ```
+
+Message windowing: controlled by `MSG_WINDOW_SIZE` env var (0 = disabled). When enabled, trims older messages while preserving tool call/result pairs.
 
 Use `langchain-mcp-adapters` `MultiServerMCPClient` to load tools from the MCP server:
 
 ```python
 from langchain_mcp_adapters.client import MultiServerMCPClient
-from langchain.chat_models import init_chat_model
+from langchain_openai import ChatOpenAI
 
 client = MultiServerMCPClient({
-    "swarm": {
+    "drone_swarm": {
         "url": "http://localhost:8000/mcp",
-        "transport": "http",
+        "transport": "streamable_http",
     }
 })
 tools = await client.get_tools()
-model = init_chat_model("openai:gpt-5-mini")
+model = ChatOpenAI(model="gpt-5-mini", temperature=0.1)
 ```
 
 ### File: `agent/runner.py`
 
 Entry point that:
-1. Connects to MCP server
-2. Builds the LangGraph agent
-3. Invokes with initial message: "Begin search and rescue mission. Discover your fleet and plan your approach."
-4. Streams agent reasoning + tool calls to `logs/mission_log.json`
-5. Publishes each reasoning entry + state change to the FastAPI bridge (for SSE streaming)
-6. Loops until agent declares mission complete or max steps reached (50)
+1. Starts MCP server + API bridge as daemon threads in-process (no separate terminals needed)
+2. Waits for both servers to become ready (exponential backoff)
+3. Connects to MCP via `MultiServerMCPClient` and loads tools
+4. Builds the LangGraph agent
+5. Waits for the dashboard "Start Mission" button (via `agent/shared.py` start trigger)
+6. Invokes with initial message: "Begin search and rescue mission. Discover your fleet and plan your approach."
+7. Streams agent reasoning + tool calls to `logs/mission_log.json`
+8. Marks mission complete via `agent/shared.py` when done
 
 ---
 
@@ -538,7 +561,7 @@ Serves current simulation state to the frontend dashboard. **Primary transport i
               events = get_new_disaster_events()
               if events:
                   yield f"event: disaster\ndata: {json.dumps(events)}\n\n"
-              await asyncio.sleep(0.5)
+              await asyncio.sleep(0.15)
       return StreamingResponse(event_generator(), media_type="text/event-stream")
   ```
 
@@ -549,6 +572,7 @@ Serves current simulation state to the frontend dashboard. **Primary transport i
   | `logs` | New agent reasoning entries | Reasoning log + voice narration |
   | `disaster` | Aftershock/water/death events | Alert flashes + terrain updates |
   | `blackout` | Blackout zone info | Red flash overlay on dashboard |
+  | `mission_complete` | Final stats + completion data | Mission end notification |
 
 #### REST Endpoints (fallback)
 
@@ -617,6 +641,8 @@ Serves current simulation state to the frontend dashboard. **Primary transport i
 - `POST /api/step` — manually advance simulation by N steps
 - `POST /api/start` — begins autonomous agent mission
 - `GET /api/mesh` — returns current mesh network topology as adjacency list
+- `GET /api/health` — health check with mission status (running, complete, idle)
+- `POST /api/reset` — reset simulation to fresh state
 
 **Run:** `uvicorn api.bridge:app --port 8001`
 
@@ -832,22 +858,21 @@ def update_heatmap(model, scan_position: tuple, found_survivors: list[tuple]):
     x, y = scan_position
     scan_radius = 1  # cells around scan position
 
-    for dx in range(-scan_radius, scan_radius + 1):
-        for dy in range(-scan_radius, scan_radius + 1):
-            nx, ny = x + dx, y + dy
-            if 0 <= nx < model.grid.width and 0 <= ny < model.grid.height:
-                if (nx, ny) in found_survivors:
-                    # Positive hit: increase adjacent cell probabilities
-                    model.heatmap[nx][ny] = min(1.0, model.heatmap[nx][ny] + 0.2)
-                    # Boost neighbors
-                    for ddx in range(-1, 2):
-                        for ddy in range(-1, 2):
-                            nnx, nny = nx + ddx, ny + ddy
-                            if 0 <= nnx < model.grid.width and 0 <= nny < model.grid.height:
-                                model.heatmap[nnx][nny] = min(1.0, model.heatmap[nnx][nny] + 0.1)
-                else:
+    if found_survivors:
+        for dx in range(-scan_radius, scan_radius + 1):
+            for dy in range(-scan_radius, scan_radius + 1):
+                nx, ny = x + dx, y + dy
+                if 0 <= nx < model.grid.width and 0 <= ny < model.grid.height:
+                    # Bayesian boost: center cell gets 0.9, adjacent get 0.6
+                    boost = 0.9 if (dx == 0 and dy == 0) else 0.6
+                    model.heatmap[ny][nx] = min(1.0, model.heatmap[ny][nx] + boost * (1 - model.heatmap[ny][nx]))
+    else:
+        for dx in range(-scan_radius, scan_radius + 1):
+            for dy in range(-scan_radius, scan_radius + 1):
+                nx, ny = x + dx, y + dy
+                if 0 <= nx < model.grid.width and 0 <= ny < model.grid.height:
                     # Negative result: decrease probability
-                    model.heatmap[nx][ny] = max(0.05, model.heatmap[nx][ny] * 0.5)
+                    model.heatmap[ny][nx] = max(0.05, model.heatmap[ny][nx] * 0.5)
 ```
 
 ---
@@ -871,8 +896,8 @@ def step(self):
 # In agents.py — DroneAgent
 def deposit_pheromones(self):
     x, y = self.position
-    # After scanning: mark territory
-    self.model.pheromone_scanned[x][y] = 1.0
+    # After scanning: mark territory (arrays indexed [y][x])
+    self.model.pheromone_scanned[y][x] = 1.0
 
 def autonomous_navigation(self):
     """Pheromone-guided movement when disconnected."""
@@ -880,9 +905,9 @@ def autonomous_navigation(self):
     best_cell = self.position
     for nx, ny in self.get_neighbors():
         score = (
-            self.model.pheromone_survivor_nearby[nx][ny] * 1.0   # attracted to survivor signals
-            - self.model.pheromone_scanned[nx][ny] * 0.5          # repelled by already-scanned
-            - self.model.pheromone_danger[nx][ny] * 2.0           # strongly repelled by danger
+            self.model.pheromone_survivor_nearby[ny][nx] * 1.0   # attracted to survivor signals
+            - self.model.pheromone_scanned[ny][nx] * 0.5          # repelled by already-scanned
+            - self.model.pheromone_danger[ny][nx] * 2.0           # strongly repelled by danger
         )
         if score > best_score:
             best_score = score
@@ -906,8 +931,8 @@ This is real stigmergy — the same mechanism ants use. It's biologically inspir
 ### Connection Rules
 - Each drone has `comm_range = 4` cells (6 cells if deployed as relay)
 - Two drones can communicate directly if Manhattan distance <= comm_range
-- A drone is `connected` to command if there exists a relay path (chain of drones within range of each other) back to base (0,0)
-- Base station at (0,0) has unlimited comm range to drones within 4 cells
+- A drone is `connected` to command if there exists a relay path (chain of drones within range of each other) back to base (6,5)
+- Base station at (6,5) has unlimited comm range to drones within 4 cells
 - Relay drones (`is_relay = True`) are stationary and have extended range, acting as communication infrastructure
 
 ### Blackout Logic
@@ -930,31 +955,30 @@ This is real stigmergy — the same mechanism ants use. It's biologically inspir
 def simulate_mission(drone_id, target_x, target_y):
     drone = get_drone(drone_id)
 
-    # Calculate Manhattan distance
-    distance = abs(drone.position[0] - target_x) + abs(drone.position[1] - target_y)
+    # Calculate Manhattan distances
+    dist_to_target = manhattan_distance(drone.pos, (target_x, target_y))
+    dist_to_base = manhattan_distance((target_x, target_y), BASE_POS)  # BASE_POS = (6, 5)
 
-    # Battery cost: 2 per move step
-    battery_cost_to_target = distance * 2
-    battery_at_arrival = drone.battery - battery_cost_to_target
+    # Battery costs
+    move_cost = 2 * dist_to_target
+    scan_cost = 3
+    return_cost = 2 * dist_to_base
+    passive_cost = dist_to_target  # 1 per step to get there
 
-    # Can it return to base after scanning?
-    distance_back = abs(target_x - 0) + abs(target_y - 0)
-    battery_cost_return = distance_back * 2 + 3  # +3 for one scan
-    can_return = battery_at_arrival - 3 - (distance_back * 2) > 5  # 5% safety margin
-
-    # Heatmap probability at target
-    survivor_probability = model.heatmap[target_x][target_y]
+    arrival_battery = drone.battery - move_cost - passive_cost
+    post_scan_battery = arrival_battery - scan_cost
+    return_battery = post_scan_battery - return_cost - dist_to_base
 
     return {
         "drone_id": drone_id,
         "target": (target_x, target_y),
-        "distance": distance,
-        "battery_cost": battery_cost_to_target,
-        "battery_at_arrival": max(0, battery_at_arrival),
-        "scan_cost": 3,
-        "can_return_to_base": can_return,
-        "survivor_probability": round(survivor_probability, 3),
-        "recommended": can_return and survivor_probability > 0.3
+        "distance_to_target": dist_to_target,
+        "distance_to_base_from_target": dist_to_base,
+        "move_cost": move_cost,
+        "arrival_battery": max(0, arrival_battery),
+        "post_scan_battery": max(0, post_scan_battery),
+        "return_battery": return_battery,
+        "return_feasible": return_battery >= 0,
     }
 ```
 
@@ -968,7 +992,7 @@ Use this scripted sequence for the live demo. The demo is designed as a **dramat
 1. **Opening** — Show the empty 12x12 grid. "A Category 5 typhoon has struck Manila. All cell towers are down. Survivors are trapped and their conditions are deteriorating every second."
 2. **Agent discovers fleet** — Watch `discover_drones()` reveal 4 drones at base. Agent reasons about initial strategy using the heatmap.
 3. **Pheromone + heatmap overlay** — Toggle the overlay. Buildings glow red (high probability). "The agent doesn't scan randomly — it uses Bayesian probabilities AND bio-inspired pheromone trails."
-4. **Sector assignment** — Agent calls `coordinate_swarm("ALL")` to assign drones to quadrants. "Each drone now has a sector to cover — and they'll continue autonomously even if communication fails."
+4. **Sector assignment** — Agent calls `coordinate_swarm()` to assign drones to quadrants. "Each drone now has a sector to cover — and they'll continue autonomously even if communication fails."
 5. **Deployment** — Watch drones fan out to high-probability zones with smooth CSS transition animations. Agent explains each assignment in the reasoning log.
 
 ### Act 2: The Living Disaster (Steps 6-15)
@@ -1046,7 +1070,7 @@ Use this scripted sequence for the live demo. The demo is designed as a **dramat
 | Time Block | Task | Details |
 |---|---|---|
 | Morning (3-4h) | Mesa simulation engine | `model.py`: grid, terrain, PropertyLayers (heatmap + 3 pheromones), disaster progression (aftershocks, rising water). `agents.py`: DroneAgent with full local autonomy methods, SurvivorAgent with health decay. `mesh_network.py`: topology, blackout, relay, resilience analysis. |
-| Afternoon (3-4h) | MCP server + all 17 tools | `server.py`: implement all tool functions against the Mesa model. Test each tool in isolation with `mcp dev`. Focus on core tools first (1-11), then innovation tools (12-17). |
+| Afternoon (3-4h) | MCP server + all 18 tools | `server.py`: implement all tool functions against the Mesa model. Test each tool in isolation with `mcp dev`. Focus on core tools first (1-12), then innovation tools (13-18). |
 | Evening (2-3h) | LangGraph agent + system prompt | `prompts.py`: full system prompt with triage protocol. `graph.py`: StateGraph with MessagesState. `runner.py`: entry point with MCP client. Test agent loop end-to-end: does it discover, scan, triage, handle blackout? |
 | **Day 1 deliverable** | Agent runs a full mission via MCP against the simulation. Triage works, pheromones work, disasters fire. No frontend yet — validate in terminal. |
 
@@ -1078,32 +1102,21 @@ Use this scripted sequence for the live demo. The demo is designed as a **dramat
 
 ## Running the Project
 
-### Terminal 1: MCP Server
-```bash
-cd project-root
-python -m mcp_server.server
-# Serves on http://localhost:8000/mcp
-```
+Only 2 terminals are needed — the agent runner starts MCP server + API bridge automatically as daemon threads.
 
-### Terminal 2: API Bridge
-```bash
-cd project-root
-uvicorn api.bridge:app --port 8001 --reload
-# Serves on http://localhost:8001
-```
-
-### Terminal 3: Agent Runner
+### Terminal 1: Agent Runner
 ```bash
 cd project-root
 python -m agent.runner
-# Connects to MCP server, starts mission
+# Starts MCP server (:8000), API bridge (:8001), then waits for dashboard Start button
 ```
 
-### Terminal 4: Frontend
+### Terminal 2: Frontend
 ```bash
 cd project-root/dashboard
 npm run dev
 # Serves on http://localhost:3000
+# Click "Start Mission" to begin the agent loop
 ```
 
 ---
@@ -1119,7 +1132,12 @@ GRID_HEIGHT=12
 NUM_DRONES=4
 NUM_SURVIVORS=8
 MAX_MISSION_STEPS=50
+LLM_MODEL=gpt-5-mini
+DEMO_MODE=0
+MSG_WINDOW_SIZE=0
 ```
+
+**Demo mode defaults:** When `DEMO_MODE=1`, the system uses `NUM_SURVIVORS=4`, `MAX_MISSION_STEPS=20`, `MSG_WINDOW_SIZE=20`, and places survivors at strategic positions near building clusters.
 
 ---
 
@@ -1144,5 +1162,5 @@ MAX_MISSION_STEPS=50
 - [ ] Dashboard updates via SSE with smooth CSS transitions and scan pulse animations (SSE Streaming)
 - [ ] Voice narration reads critical agent decisions aloud via SpeechSynthesis (Voice Narration)
 - [ ] Timeline slider enables judges to rewind and replay any step of the mission (Mission Replay)
-- [ ] All 17 MCP tools are functional (11 core + 6 innovation)
+- [ ] All 18 MCP tools are functional (12 core + 6 innovation)
 - [ ] Demo script produces at least 5 distinct "wow moments" for judges

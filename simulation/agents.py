@@ -2,6 +2,8 @@
 
 import mesa
 
+BASE_POS = (6, 5)  # Center of the 12x12 grid — must match simulation/model.py
+
 
 class SurvivorAgent(mesa.Agent):
     """A survivor trapped in the disaster zone with decaying health."""
@@ -52,6 +54,15 @@ class DroneAgent(mesa.Agent):
             return {"success": False, "reason": "out of bounds"}
         if self.model.terrain[y][x] == "WATER":
             return {"success": False, "reason": "cannot move to water"}
+
+        # Single-cell movement enforcement — drones move one step at a time
+        dx_dist = abs(x - self.pos[0])
+        dy_dist = abs(y - self.pos[1])
+        if dx_dist > 1 or dy_dist > 1:
+            return {
+                "success": False,
+                "reason": f"Can only move 1 cell at a time. Current: {list(self.pos)}, target: [{x},{y}]",
+            }
 
         # No-op guard: don't waste battery moving to current position
         if (x, y) == self.pos:
@@ -141,6 +152,7 @@ class DroneAgent(mesa.Agent):
             }
 
         survivor.rescued = True
+        self.model.grid.remove_agent(survivor)
         return {
             "success": True,
             "drone_id": self.drone_id,
@@ -201,8 +213,8 @@ class DroneAgent(mesa.Agent):
             self._pheromone_navigate()
 
     def _pathfind_to_base(self):
-        """Greedy pathfinding toward (0, 0)."""
-        if self.pos == (0, 0):
+        """Greedy pathfinding toward BASE_POS."""
+        if self.pos == BASE_POS:
             self.status = "charging"
             return
         if self.battery < 2:
@@ -210,9 +222,9 @@ class DroneAgent(mesa.Agent):
             return
 
         x, y = self.pos
-        # Move one step toward (0, 0)
-        dx = -1 if x > 0 else (1 if x < 0 else 0)
-        dy = -1 if y > 0 else (1 if y < 0 else 0)
+        bx, by = BASE_POS
+        dx = 1 if x < bx else (-1 if x > bx else 0)
+        dy = 1 if y < by else (-1 if y > by else 0)
 
         # Try diagonal first, then cardinal directions
         candidates = []
@@ -231,7 +243,7 @@ class DroneAgent(mesa.Agent):
 
     def _charge(self):
         """Charge battery at base station."""
-        if self.pos != (0, 0):
+        if self.pos != BASE_POS:
             self.status = "returning"
             return
         charge_rate = 15 if getattr(self.model, "demo_mode", False) else 10

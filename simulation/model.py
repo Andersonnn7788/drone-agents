@@ -7,6 +7,8 @@ import random
 from .agents import DroneAgent, SurvivorAgent
 from .mesh_network import compute_mesh_topology, apply_blackout, manhattan_distance
 
+BASE_POS = (6, 5)  # Center of the 12x12 grid
+
 
 class DisasterModel(mesa.Model):
     def __init__(self, seed=42, width=12, height=12, num_drones=4, num_survivors=8, demo_mode=False):
@@ -36,13 +38,14 @@ class DisasterModel(mesa.Model):
         self.agent_logs = []
         self.blackout_zones = []
 
-        # Create drones at base (0, 0)
+        # Create drones at base
         drone_names = ["drone_alpha", "drone_bravo", "drone_charlie", "drone_delta", "drone_echo"]
         self.drones = {}
         for name in drone_names[:num_drones]:
             drone = DroneAgent(self, name)
             self.drones[name] = drone
-            self.grid.place_agent(drone, (0, 0))
+            self.grid.place_agent(drone, BASE_POS)
+            drone.pos = BASE_POS  # Explicit set for Mesa 3 compatibility
 
         # Create survivors
         if demo_mode:
@@ -51,7 +54,7 @@ class DisasterModel(mesa.Model):
             self._place_random_survivors(num_survivors)
 
         # Initial mesh computation
-        self.mesh_topology = compute_mesh_topology(self.drones)
+        self.mesh_topology = compute_mesh_topology(self.drones, BASE_POS)
 
         # Record initial state
         self.state_history.append(self.get_state())
@@ -66,7 +69,7 @@ class DisasterModel(mesa.Model):
             severities.append("MODERATE")
         passable = [
             (x, y) for x in range(self.width) for y in range(self.height)
-            if self.terrain[y][x] not in ("WATER",) and (x, y) != (0, 0)
+            if self.terrain[y][x] not in ("WATER",) and (x, y) != BASE_POS
         ]
         positions = self._rng.sample(passable, min(num_survivors, len(passable)))
         for pos, severity in zip(positions, severities):
@@ -75,16 +78,21 @@ class DisasterModel(mesa.Model):
             self.grid.place_agent(survivor, pos)
 
     def _place_demo_survivors(self, num_survivors):
-        """Place survivors at strategic positions near building clusters (demo mode).
-        Guarantees each quadrant drone finds a survivor quickly."""
+        """Place survivors in 3 waves for staggered discovery during demo.
+        Wave 1 (steps 2-3): near base. Wave 2 (steps 5-7): mid-distance.
+        Wave 3 (steps 9-11): far, post-blackout drama."""
         self.survivors = []
-        # Deterministic placements: 2 CRITICAL, 2 MODERATE, 1 STABLE
         demo_placements = [
-            ((3, 3), "CRITICAL"),    # SW building cluster
-            ((9, 9), "CRITICAL"),    # NE building cluster
-            ((3, 10), "MODERATE"),   # NW building cluster
-            ((10, 2), "MODERATE"),   # SE building cluster
-            ((6, 6), "STABLE"),      # center of map
+            # Wave 1: Near base, found early — shows scan-rescue loop
+            ((4, 4), "CRITICAL"),     # SW buildings, ~3 cells from base
+
+            # Wave 2: Mid-distance, around aftershock/blackout events
+            ((9, 3), "MODERATE"),     # SE buildings, ~6 from base
+            ((2, 9), "CRITICAL"),     # NW buildings, ~8 from base — urgent triage
+
+            # Wave 3: Far, post-blackout + rising water drama
+            ((9, 9), "MODERATE"),     # NE buildings — inside blackout zone (center 8,8 r=3)
+            ((8, 9), "STABLE"),       # NE buildings — inside blackout zone (Manhattan from (8,8)=1)
         ]
         for (x, y), severity in demo_placements[:num_survivors]:
             survivor = SurvivorAgent(self, severity)
@@ -191,7 +199,7 @@ class DisasterModel(mesa.Model):
             self._check_rising_water()
 
         # 6. Recompute mesh topology
-        self.mesh_topology = compute_mesh_topology(self.drones)
+        self.mesh_topology = compute_mesh_topology(self.drones, BASE_POS)
 
         # 7. Re-apply active blackout zones
         for zone in self.blackout_zones:
@@ -277,8 +285,8 @@ class DisasterModel(mesa.Model):
         """Deterministic demo events at specific steps."""
         step = self.mission_step
 
-        # Step 4: Aftershock near (5, 4)
-        if step == 4:
+        # Step 2: Aftershock near (5, 4)
+        if step == 2:
             cx, cy = 5, 4
             converted = []
             for dx in range(-1, 2):
@@ -298,12 +306,12 @@ class DisasterModel(mesa.Model):
                     "affected_cells": converted,
                 })
 
-        # Step 6: Blackout at (8, 8) radius 3
-        elif step == 6:
+        # Step 4: Blackout at (8, 8) radius 3
+        elif step == 4:
             self.trigger_blackout(8, 8, 3)
 
-        # Step 9: Blackout clears
-        elif step == 9:
+        # Step 6: Blackout clears
+        elif step == 6:
             if self.blackout_zones:
                 self.blackout_zones.clear()
                 # Restore connectivity for all drones
@@ -315,8 +323,8 @@ class DisasterModel(mesa.Model):
                     "message": "Communication blackout has lifted. All drones reconnected.",
                 })
 
-        # Step 11: Rising water near (10, 7)
-        elif step == 11:
+        # Step 7: Rising water near (10, 7)
+        elif step == 7:
             wx, wy = 10, 7
             expanded = []
             for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
@@ -350,7 +358,7 @@ class DisasterModel(mesa.Model):
             return {"success": False, "reason": f"drone is {drone.status}"}
 
         dist_to_target = manhattan_distance(drone.pos, (target_x, target_y))
-        dist_to_base = manhattan_distance((target_x, target_y), (0, 0))
+        dist_to_base = manhattan_distance((target_x, target_y), BASE_POS)
 
         move_cost = 2 * dist_to_target
         scan_cost = 3
@@ -434,6 +442,8 @@ class DisasterModel(mesa.Model):
 
     def get_state(self):
         """Full JSON-serializable state snapshot."""
+        # Recompute mesh so SSE always pushes fresh topology
+        self.mesh_topology = compute_mesh_topology(self.drones, BASE_POS)
         # Only include found or rescued survivors (fog of war)
         known_survivors = []
         for s in self.survivors:
@@ -457,6 +467,7 @@ class DisasterModel(mesa.Model):
 
         return {
             "mission_step": self.mission_step,
+            "base_position": list(BASE_POS),
             "terrain": self.terrain,
             "drones": {did: d.to_dict() for did, d in self.drones.items()},
             "survivors": known_survivors,

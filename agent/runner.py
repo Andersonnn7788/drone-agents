@@ -19,6 +19,35 @@ from agent.shared import set_start_trigger, set_mission_complete
 from .graph import build_graph, _log_to_model
 
 
+# ── Windows error suppression ─────────────────────────────────────────
+
+def _make_proactor_exception_handler():
+    """Windows ProactorEventLoop handler — suppresses harmless connection-reset errors."""
+    def handler(loop, context):
+        msg = context.get("message", "")
+        if "_ProactorBasePipeTransport" in msg:
+            return
+        exc = context.get("exception")
+        if isinstance(exc, ConnectionResetError):
+            return
+        if isinstance(exc, OSError) and getattr(exc, "winerror", None) in (10054, 10053):
+            return
+        loop.default_exception_handler(context)
+    return handler
+
+
+def _run_uvicorn_with_suppression(server):
+    """Run uvicorn server with Windows error suppression on its event loop."""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    if sys.platform == "win32":
+        loop.set_exception_handler(_make_proactor_exception_handler())
+    try:
+        loop.run_until_complete(server.serve())
+    finally:
+        loop.close()
+
+
 # ── Server launchers ──────────────────────────────────────────────────
 
 def start_mcp_server():
@@ -27,7 +56,7 @@ def start_mcp_server():
     app = mcp.streamable_http_app()
     config = uvicorn.Config(app, host="0.0.0.0", port=8000, log_level="warning")
     server = uvicorn.Server(config)
-    thread = threading.Thread(target=server.run, daemon=True)
+    thread = threading.Thread(target=_run_uvicorn_with_suppression, args=(server,), daemon=True)
     thread.start()
     return server
 
@@ -37,7 +66,7 @@ def start_api_bridge():
     from api.bridge import app
     config = uvicorn.Config(app, host="0.0.0.0", port=8001, log_level="warning")
     server = uvicorn.Server(config)
-    thread = threading.Thread(target=server.run, daemon=True)
+    thread = threading.Thread(target=_run_uvicorn_with_suppression, args=(server,), daemon=True)
     thread.start()
     return server
 
@@ -150,17 +179,7 @@ async def run_mission():
     # Suppress Windows ProactorEventLoop cleanup errors
     if sys.platform == "win32":
         loop = asyncio.get_running_loop()
-        _orig_handler = loop.get_exception_handler()
-
-        def _suppress_proactor_err(loop, context):
-            if "_ProactorBasePipeTransport" in context.get("message", ""):
-                return  # Harmless shutdown noise
-            if _orig_handler:
-                _orig_handler(loop, context)
-            else:
-                loop.default_exception_handler(context)
-
-        loop.set_exception_handler(_suppress_proactor_err)
+        loop.set_exception_handler(_make_proactor_exception_handler())
 
     # 1. Start MCP server + API bridge in background threads
     print("\n[1/4] Starting servers...")

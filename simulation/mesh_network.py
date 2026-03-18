@@ -7,7 +7,7 @@ def manhattan_distance(pos1, pos2):
     return abs(pos1[0] - pos2[0]) + abs(pos1[1] - pos2[1])
 
 
-def compute_mesh_topology(drones, base_pos=(0, 0)):
+def compute_mesh_topology(drones, base_pos=(6, 5)):
     """Build adjacency graph using Manhattan distance and comm_range.
     Update each drone's connected status via BFS from base.
 
@@ -106,7 +106,7 @@ def sync_drone(drone):
     return findings
 
 
-def get_network_resilience(drones, base_pos=(0, 0)):
+def get_network_resilience(drones, base_pos=(6, 5)):
     """Analyze mesh network resilience.
     Returns dict with connectivity_ratio, critical_nodes, coverage_gaps, relay_suggestions.
     """

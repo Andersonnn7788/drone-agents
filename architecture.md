@@ -25,6 +25,8 @@ flowchart TB
         START["/api/start (POST)"]
         STEP["/api/step (POST)"]
         BLACKOUT_EP["/api/blackout (POST)"]
+        HEALTH["/api/health (GET)"]
+        RESET["/api/reset (POST)"]
     end
 
     subgraph Agent["LangGraph Agent"]
@@ -34,7 +36,7 @@ flowchart TB
     end
 
     subgraph MCP["MCP Server :8000/mcp"]
-        TOOLS["17 @mcp.tool() endpoints"]
+        TOOLS["18 @mcp.tool() endpoints"]
     end
 
     subgraph Sim["Mesa Simulation Engine"]
@@ -124,12 +126,12 @@ flowchart TB
             BUILDING["BUILDING<br>(prob 0.7)"]
             ROAD["ROAD<br>(prob 0.5)"]
             OPEN["OPEN<br>(prob 0.3)"]
-            WATER["WATER"]
-            DEBRIS["DEBRIS"]
+            WATER["WATER<br>(prob 0.1)"]
+            DEBRIS["DEBRIS<br>(prob 0.1)"]
         end
 
         subgraph Agents_Layer["Agents"]
-            DA["DroneAgents (4-5)<br>Battery: 100<br>Start: (0,0)"]
+            DA["DroneAgents (4-5)<br>Battery: 100<br>Start: (6,5)"]
             SVA["SurvivorAgents (8)<br>Severity: CRITICAL / MODERATE / STABLE"]
         end
 
@@ -158,11 +160,11 @@ flowchart TB
 
 ## 4. MCP Tool Categories
 
-17 tools organized by category.
+18 tools organized by category.
 
 ```mermaid
 flowchart LR
-    subgraph Core["Core Tools (11)"]
+    subgraph Core["Core Tools (12)"]
         discover_drones["discover_drones<br>List active drones"]
         move_to["move_to<br>Move drone to cell"]
         thermal_scan["thermal_scan<br>Scan cell for survivors"]
@@ -174,6 +176,7 @@ flowchart LR
         recall["recall_drone<br>Return drone to base"]
         get_summary["get_mission_summary<br>Mission statistics"]
         advance["advance_simulation<br>Step simulation forward"]
+        rescue["rescue_survivor<br>Rescue a found survivor"]
     end
 
     subgraph Innovation["Innovation Tools (6)"]
@@ -211,7 +214,7 @@ stateDiagram-v2
     Autonomous --> Active: connection restored
     Autonomous --> Returning: battery < 15%
 
-    Returning --> Charging: reached base (0,0)
+    Returning --> Charging: reached base (6,5)
 
     Charging --> Active: battery recharged
 
@@ -251,6 +254,7 @@ sequenceDiagram
     API-->>UI: SSE event: "logs" (agent reasoning)
     API-->>UI: SSE event: "disaster" (if triggered)
     API-->>UI: SSE event: "blackout" (if active)
+    API-->>UI: SSE event: "mission_complete" (if finished)
 
     UI->>UI: Render grid, panels, logs
     UI->>UI: Store snapshot for timeline replay
@@ -313,7 +317,7 @@ flowchart LR
     subgraph Bridge["FastAPI Bridge :8001"]
         POLL["State Poller"]
         SSE_GEN["SSE Generator<br>(GET /api/stream)"]
-        REST_EP["REST Endpoints<br>(GET /api/state)<br>(GET /api/logs)<br>(GET /api/history)<br>(GET /api/mesh)"]
+        REST_EP["REST Endpoints<br>(GET /api/state)<br>(GET /api/logs)<br>(GET /api/history)<br>(GET /api/mesh)<br>(GET /api/health)<br>(POST /api/reset)"]
     end
 
     subgraph Dashboard["Next.js Dashboard :3000"]
@@ -341,6 +345,7 @@ flowchart LR
     SSE_GEN -->|"event: logs"| EVS
     SSE_GEN -->|"event: disaster"| EVS
     SSE_GEN -->|"event: blackout"| EVS
+    SSE_GEN -->|"event: mission_complete"| EVS
 
     REST_EP -->|"HTTP GET (fallback)"| Components
 
@@ -444,7 +449,7 @@ flowchart TB
 | MCP Server | `:8000/mcp` | Streamable HTTP |
 | FastAPI Bridge | `:8001` | SSE + REST |
 | Next.js Dashboard | `:3000` | HTTP |
-| Base Station | Grid `(0,0)` | — |
+| Base Station | Grid `(6,5)` | — |
 
 | Resource | Cost |
 |---|---|

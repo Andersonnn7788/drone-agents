@@ -23,7 +23,7 @@ The entire system is observable through a real-time Next.js dashboard with grid 
 | Tier | Role | How It Works |
 |------|------|-------------|
 | **Tier 1 — LLM Commander** (Strategic) | Sector assignments, triage reasoning, digital twin planning, pheromone map analysis, swarm coordination | Communicates via MCP tool calls over Streamable HTTP |
-| **Tier 2 — Drone Local Autonomy** (Tactical) | Continue scanning, auto-return at low battery, pheromone gradient navigation, mesh relay, buffer findings | Operates independently during blackouts — no LLM needed |
+| **Tier 2 — Drone Local Autonomy** (Tactical) | Continue scanning, auto-return at low battery, pheromone gradient navigation, mesh relay, buffer findings | Operates independently during blackouts — MCP tools reject commands to disconnected drones, enforcing true autonomous operation |
 
 During a communication blackout, drones seamlessly switch to autonomous mode: following pheromone gradients (`score = survivor_nearby - 0.5*scanned - 2.0*danger`), auto-returning when battery drops below 15%, and buffering discoveries until connectivity is restored.
 
@@ -59,7 +59,7 @@ flowchart TB
     end
 
     subgraph MCP["MCP Server :8000/mcp"]
-        TOOLS["17 @mcp.tool() endpoints"]
+        TOOLS["18 @mcp.tool() endpoints"]
     end
 
     subgraph Sim["Mesa Simulation Engine"]
@@ -296,7 +296,7 @@ flowchart TB
 
 - **Digital Twin (`simulate_mission`)** — Predicts battery cost, arrival battery, return feasibility, and survivor probability *before* committing a drone. Enables chain-of-thought planning.
 
-- **Mesh Network & Self-Healing** — Drones communicate within `comm_range=4` (Manhattan distance). Blackout zones force autonomous mode. Disconnected drones buffer findings. Self-healing via topology recomputation detects restored relay paths and triggers `sync_findings()`. Low-battery drones can be sacrificed as stationary relays (`comm_range=6`).
+- **Mesh Network & Self-Healing** — Drones communicate within `comm_range=4` (Manhattan distance). Blackout zones force autonomous mode — MCP tools (`move_to`, `thermal_scan`, `rescue_survivor`, `recall_drone`, `deploy_as_relay`) reject commands to disconnected drones, ensuring the LLM cannot override local autonomy. Disconnected drones buffer findings. Self-healing via topology recomputation detects restored relay paths and triggers `sync_findings()`. Low-battery drones can be sacrificed as stationary relays (`comm_range=6`).
 
 - **Triage Protocol** — LLM reasons through survivor priority: CRITICAL + low health = immediate, MODERATE = medium, STABLE = low. Equal urgency ties broken by proximity. Digital twin validates feasibility before dispatch.
 
@@ -308,9 +308,9 @@ flowchart TB
 
 ---
 
-## MCP Tools (17 total)
+## MCP Tools (18 total)
 
-**Core (11):**
+**Core (12):**
 
 | Tool | Description |
 |------|-------------|
@@ -325,6 +325,7 @@ flowchart TB
 | `recall_drone` | Return a drone to base |
 | `get_mission_summary` | Mission statistics and progress |
 | `advance_simulation` | Step the simulation forward |
+| `rescue_survivor` | Rescue a found survivor at the drone's position |
 
 **Innovation (6):**
 
@@ -356,7 +357,7 @@ drone-agents/
 │   └── state.py               # Shared model singleton (used by MCP + bridge)
 ├── mcp_server/
 │   ├── __init__.py
-│   └── server.py              # FastMCP server — 17 @mcp.tool() definitions
+│   └── server.py              # FastMCP server — 18 @mcp.tool() definitions
 ├── agent/
 │   ├── __init__.py
 │   ├── graph.py               # LangGraph StateGraph (MessagesState)

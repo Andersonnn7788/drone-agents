@@ -1,675 +1,1674 @@
 {
-  "mission_steps": 4,
+  "mission_steps": 15,
   "stats": {
     "total_survivors": 5,
     "found": 5,
     "alive": 5,
     "rescued": 5,
-    "active_drones": 4,
+    "active_drones": 0,
     "total_drones": 4,
-    "cells_scanned": 80,
+    "cells_scanned": 89,
     "total_cells": 144,
-    "coverage_pct": 55.6
+    "coverage_pct": 61.8
   },
   "logs": [
     {
       "step": 0,
-      "timestamp": 1773670791.2653236,
+      "timestamp": 1773845391.7929213,
       "message": "Mission initiated \u2014 LLM Commander online.",
       "is_critical": true,
       "type": "system"
     },
     {
       "step": 0,
-      "timestamp": 1773670794.4341729,
+      "timestamp": 1773845404.4685907,
       "message": "Tool call: discover_drones()",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 0,
-      "timestamp": 1773670796.060931,
-      "message": "Result [discover_drones]: [{'type': 'text', 'text': '{\\n  \"drone_id\": \"drone_alpha\",\\n  \"position\": [\\n    0,\\n    0\\n  ],\\n  \"battery\": 100,\\n  \"status\": \"active\",\\n  \"connected\": true,\\n  \"is_relay\": false,\\n  \"comm_range\": 4,\\n  \"assigned_sector\": null,\\n  \"findings_buffer_size\": 0\\n}', 'id': 'lc_ffda8ee2-7fb1-4878-81c0-c...",
-      "is_critical": false,
-      "type": "result"
+      "timestamp": 1773845404.7749975,
+      "message": "Fleet online \u2014 4 drones reporting for duty.",
+      "is_critical": true,
+      "type": "narrative"
     },
     {
       "step": 0,
-      "timestamp": 1773670800.4871979,
+      "timestamp": 1773845429.8486817,
       "message": "Tool call: coordinate_swarm()",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 0,
-      "timestamp": 1773670802.1024342,
-      "message": "Result [coordinate_swarm]: [{'type': 'text', 'text': '{\\n  \"success\": true,\\n  \"assignments\": {\\n    \"drone_alpha\": [\\n      0,\\n      0,\\n      6,\\n      6\\n    ],\\n    \"drone_bravo\": [\\n      6,\\n      0,\\n      6,\\n      6\\n    ],\\n    \"drone_charlie\": [\\n      0,\\n      6,\\n      6,\\n      6\\n    ],\\n    \"drone_delta\": [\\...",
-      "is_critical": false,
-      "type": "result"
+      "timestamp": 1773845430.1073377,
+      "message": "Swarm sectors assigned \u2014 drones dispersing for coverage.",
+      "is_critical": true,
+      "type": "narrative"
     },
     {
       "step": 0,
-      "timestamp": 1773670820.6053445,
-      "message": "Tool call: move_to(drone_id=drone_alpha, x=3, y=3)",
-      "is_critical": false,
-      "type": "tool_call"
-    },
-    {
-      "step": 0,
-      "timestamp": 1773670820.6053445,
-      "message": "Tool call: move_to(drone_id=drone_bravo, x=9, y=3)",
+      "timestamp": 1773845460.42501,
+      "message": "Tool call: move_to(drone_id=\"drone_alpha\", x=5, y=4)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 0,
-      "timestamp": 1773670820.6053445,
-      "message": "Tool call: move_to(drone_id=drone_charlie, x=3, y=9)",
+      "timestamp": 1773845460.42501,
+      "message": "Tool call: move_to(drone_id=\"drone_alpha\", x=4, y=3)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 0,
-      "timestamp": 1773670820.6053445,
-      "message": "Tool call: move_to(drone_id=drone_delta, x=9, y=9)",
+      "timestamp": 1773845460.42501,
+      "message": "Tool call: move_to(drone_id=\"drone_bravo\", x=7, y=4)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 0,
-      "timestamp": 1773670823.4277866,
-      "message": "Result [move_to]: [{'type': 'text', 'text': '{\\n  \"success\": true,\\n  \"position\": [\\n    3,\\n    3\\n  ],\\n  \"battery\": 98\\n}', 'id': 'lc_199dd819-0b12-4f5f-abc8-1c9665341873'}]",
+      "timestamp": 1773845460.42501,
+      "message": "Tool call: move_to(drone_id=\"drone_bravo\", x=8, y=3)",
       "is_critical": false,
-      "type": "result"
+      "type": "tool_call"
     },
     {
       "step": 0,
-      "timestamp": 1773670823.4277866,
-      "message": "Result [move_to]: [{'type': 'text', 'text': '{\\n  \"success\": true,\\n  \"position\": [\\n    9,\\n    3\\n  ],\\n  \"battery\": 98\\n}', 'id': 'lc_7ed55371-bbde-4cab-8a46-a6eb913112a8'}]",
+      "timestamp": 1773845460.42501,
+      "message": "Tool call: move_to(drone_id=\"drone_charlie\", x=5, y=6)",
       "is_critical": false,
-      "type": "result"
+      "type": "tool_call"
     },
     {
       "step": 0,
-      "timestamp": 1773670823.4277866,
-      "message": "Result [move_to]: [{'type': 'text', 'text': '{\\n  \"success\": true,\\n  \"position\": [\\n    3,\\n    9\\n  ],\\n  \"battery\": 98\\n}', 'id': 'lc_4d509a88-9f4e-4c45-920b-df0eddbd5e12'}]",
+      "timestamp": 1773845460.42501,
+      "message": "Tool call: move_to(drone_id=\"drone_charlie\", x=4, y=7)",
       "is_critical": false,
-      "type": "result"
+      "type": "tool_call"
     },
     {
       "step": 0,
-      "timestamp": 1773670823.4277866,
-      "message": "Result [move_to]: [{'type': 'text', 'text': '{\\n  \"success\": true,\\n  \"position\": [\\n    9,\\n    9\\n  ],\\n  \"battery\": 98\\n}', 'id': 'lc_56413522-086c-4aab-89b0-a7cca9be18ed'}]",
+      "timestamp": 1773845460.42501,
+      "message": "Tool call: move_to(drone_id=\"drone_delta\", x=7, y=6)",
       "is_critical": false,
-      "type": "result"
+      "type": "tool_call"
     },
     {
       "step": 0,
-      "timestamp": 1773670824.4999056,
-      "message": "Tool call: advance_simulation(steps=1)",
+      "timestamp": 1773845460.42501,
+      "message": "Tool call: move_to(drone_id=\"drone_delta\", x=8, y=7)",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 0,
+      "timestamp": 1773845460.42501,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_alpha\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 0,
+      "timestamp": 1773845460.42501,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_bravo\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 0,
+      "timestamp": 1773845460.42501,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_charlie\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 0,
+      "timestamp": 1773845460.42501,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_delta\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 0,
+      "timestamp": 1773845465.0337954,
+      "message": "Survivor detected \u2014 CRITICAL. Initiating triage protocol.",
+      "is_critical": true,
+      "type": "triage"
+    },
+    {
+      "step": 0,
+      "timestamp": 1773845465.3123674,
+      "message": "Survivor detected \u2014 MODERATE. Initiating triage protocol.",
+      "is_critical": false,
+      "type": "triage"
+    },
+    {
+      "step": 0,
+      "timestamp": 1773845465.5624194,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 0,
+      "timestamp": 1773845465.8298066,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 1,
+      "timestamp": 1773845465.8298066,
+      "message": "Auto-step \u2192 step 1",
+      "is_critical": false,
+      "type": "system"
+    },
+    {
+      "step": 1,
+      "timestamp": 1773845496.623578,
+      "message": "Tool call: move_to(drone_id=\"drone_alpha\", x=4, y=4)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 1,
-      "timestamp": 1773670826.1356587,
-      "message": "Result [advance_simulation]: [{'type': 'text', 'text': '{\\n  \"steps_advanced\": 1,\\n  \"new_mission_step\": 1,\\n  \"stats\": {\\n    \"total_survivors\": 5,\\n    \"found\": 0,\\n    \"alive\": 5,\\n    \"rescued\": 0,\\n    \"active_drones\": 4,\\n    \"total_drones\": 4,\\n    \"cells_scanned\": 0,\\n    \"total_cells\": 144,\\n    \"coverage_pct\": 0.0\\n  ...",
-      "is_critical": false,
-      "type": "result"
-    },
-    {
-      "step": 1,
-      "timestamp": 1773670829.7615564,
-      "message": "Tool call: thermal_scan(drone_id=drone_alpha)",
+      "timestamp": 1773845496.623578,
+      "message": "Tool call: rescue_survivor(drone_id=\"drone_alpha\", survivor_id=5)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 1,
-      "timestamp": 1773670829.7615564,
-      "message": "Tool call: thermal_scan(drone_id=drone_bravo)",
+      "timestamp": 1773845496.623578,
+      "message": "Tool call: move_to(drone_id=\"drone_bravo\", x=9, y=3)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 1,
-      "timestamp": 1773670829.7615564,
-      "message": "Tool call: thermal_scan(drone_id=drone_charlie)",
+      "timestamp": 1773845496.623578,
+      "message": "Tool call: rescue_survivor(drone_id=\"drone_bravo\", survivor_id=6)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 1,
-      "timestamp": 1773670829.7615564,
-      "message": "Tool call: thermal_scan(drone_id=drone_delta)",
+      "timestamp": 1773845496.623578,
+      "message": "Tool call: coordinate_swarm()",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 1,
-      "timestamp": 1773670832.5143268,
-      "message": "Result [thermal_scan]: [{'type': 'text', 'text': '{\\n  \"success\": true,\\n  \"position\": [\\n    3,\\n    3\\n  ],\\n  \"survivors_found\": [\\n    {\\n      \"survivor_id\": 5,\\n      \"position\": [\\n        3,\\n        3\\n      ],\\n      \"severity\": \"CRITICAL\",\\n      \"health\": 0.95\\n    }\\n  ],\\n  \"cells_scanned\": 9,\\n  \"battery\": ...",
+      "timestamp": 1773845497.4292314,
+      "message": "Survivor rescued successfully.",
       "is_critical": true,
       "type": "triage"
     },
     {
       "step": 1,
-      "timestamp": 1773670832.5143268,
-      "message": "Result [thermal_scan]: [{'type': 'text', 'text': '{\\n  \"success\": true,\\n  \"position\": [\\n    9,\\n    3\\n  ],\\n  \"survivors_found\": [\\n    {\\n      \"survivor_id\": 8,\\n      \"position\": [\\n        10,\\n        2\\n      ],\\n      \"severity\": \"MODERATE\",\\n      \"health\": 0.98\\n    }\\n  ],\\n  \"cells_scanned\": 9,\\n  \"battery\":...",
-      "is_critical": false,
-      "type": "result"
-    },
-    {
-      "step": 1,
-      "timestamp": 1773670832.5143268,
-      "message": "Result [thermal_scan]: [{'type': 'text', 'text': '{\\n  \"success\": true,\\n  \"position\": [\\n    3,\\n    9\\n  ],\\n  \"survivors_found\": [\\n    {\\n      \"survivor_id\": 7,\\n      \"position\": [\\n        3,\\n        10\\n      ],\\n      \"severity\": \"MODERATE\",\\n      \"health\": 0.98\\n    }\\n  ],\\n  \"cells_scanned\": 9,\\n  \"battery\":...",
-      "is_critical": false,
-      "type": "result"
-    },
-    {
-      "step": 1,
-      "timestamp": 1773670832.5143268,
-      "message": "Result [thermal_scan]: [{'type': 'text', 'text': '{\\n  \"success\": true,\\n  \"position\": [\\n    9,\\n    9\\n  ],\\n  \"survivors_found\": [\\n    {\\n      \"survivor_id\": 6,\\n      \"position\": [\\n        9,\\n        9\\n      ],\\n      \"severity\": \"CRITICAL\",\\n      \"health\": 0.95\\n    }\\n  ],\\n  \"cells_scanned\": 9,\\n  \"battery\": ...",
+      "timestamp": 1773845498.2551444,
+      "message": "Survivor rescued successfully.",
       "is_critical": true,
       "type": "triage"
     },
     {
       "step": 1,
-      "timestamp": 1773670860.8902426,
-      "message": "Tool call: move_to(drone_id=drone_bravo, x=10, y=2)",
+      "timestamp": 1773845498.5167546,
+      "message": "Swarm sectors assigned \u2014 drones dispersing for coverage.",
+      "is_critical": true,
+      "type": "narrative"
+    },
+    {
+      "step": 2,
+      "timestamp": 1773845498.5178323,
+      "message": "Auto-step \u2192 step 2",
+      "is_critical": false,
+      "type": "system"
+    },
+    {
+      "step": 2,
+      "timestamp": 1773845544.7856152,
+      "message": "Tool call: move_to(drone_id=\"drone_alpha\", x=3, y=3)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
-      "step": 1,
-      "timestamp": 1773670860.8902426,
-      "message": "Tool call: move_to(drone_id=drone_bravo, x=10, y=2)",
+      "step": 2,
+      "timestamp": 1773845544.7856152,
+      "message": "Tool call: move_to(drone_id=\"drone_bravo\", x=9, y=3)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
-      "step": 1,
-      "timestamp": 1773670860.8902426,
-      "message": "Tool call: move_to(drone_id=drone_charlie, x=3, y=10)",
+      "step": 2,
+      "timestamp": 1773845544.7856152,
+      "message": "Tool call: move_to(drone_id=\"drone_charlie\", x=3, y=8)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
-      "step": 1,
-      "timestamp": 1773670863.2597992,
-      "message": "Result [move_to]: [{'type': 'text', 'text': '{\\n  \"success\": true,\\n  \"position\": [\\n    10,\\n    2\\n  ],\\n  \"battery\": 92\\n}', 'id': 'lc_25146416-2870-4922-8e20-7356d578ef0c'}]",
-      "is_critical": false,
-      "type": "result"
-    },
-    {
-      "step": 1,
-      "timestamp": 1773670863.2597992,
-      "message": "Result [move_to]: [{'type': 'text', 'text': '{\\n  \"success\": true,\\n  \"position\": [\\n    10,\\n    2\\n  ],\\n  \"battery\": 90\\n}', 'id': 'lc_204f231b-6d69-4a91-ab65-981b6ecc39d1'}]",
-      "is_critical": false,
-      "type": "result"
-    },
-    {
-      "step": 1,
-      "timestamp": 1773670863.2597992,
-      "message": "Result [move_to]: [{'type': 'text', 'text': '{\\n  \"success\": true,\\n  \"position\": [\\n    3,\\n    10\\n  ],\\n  \"battery\": 92\\n}', 'id': 'lc_b1c099f0-a6da-4c45-a969-7a252e4c5a4a'}]",
-      "is_critical": false,
-      "type": "result"
-    },
-    {
-      "step": 1,
-      "timestamp": 1773670864.6595335,
-      "message": "Tool call: rescue_survivor(drone_id=drone_alpha, survivor_id=5)",
+      "step": 2,
+      "timestamp": 1773845544.7856152,
+      "message": "Tool call: move_to(drone_id=\"drone_charlie\", x=2, y=9)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
-      "step": 1,
-      "timestamp": 1773670866.3494668,
-      "message": "Result [rescue_survivor]: [{'type': 'text', 'text': '{\\n  \"success\": true,\\n  \"drone_id\": \"drone_alpha\",\\n  \"survivor_id\": 5,\\n  \"severity\": \"CRITICAL\",\\n  \"health\": 0.95,\\n  \"position\": [\\n    3,\\n    3\\n  ]\\n}', 'id': 'lc_bef5e43e-9885-4d99-8a80-4be3be785de4'}]",
+      "step": 2,
+      "timestamp": 1773845544.7856152,
+      "message": "Tool call: move_to(drone_id=\"drone_delta\", x=8, y=8)",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 2,
+      "timestamp": 1773845544.7856152,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_alpha\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 2,
+      "timestamp": 1773845544.7856152,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_bravo\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 2,
+      "timestamp": 1773845544.7856152,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_charlie\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 2,
+      "timestamp": 1773845544.7856152,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_delta\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 2,
+      "timestamp": 1773845547.6666398,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 2,
+      "timestamp": 1773845547.9297166,
+      "message": "Survivor detected \u2014 STABLE. Initiating triage protocol.",
+      "is_critical": false,
+      "type": "triage"
+    },
+    {
+      "step": 2,
+      "timestamp": 1773845548.1920514,
+      "message": "Survivor detected \u2014 CRITICAL. Initiating triage protocol.",
       "is_critical": true,
       "type": "triage"
     },
     {
-      "step": 1,
-      "timestamp": 1773670867.6349163,
-      "message": "Tool call: rescue_survivor(drone_id=drone_delta, survivor_id=6)",
+      "step": 2,
+      "timestamp": 1773845548.452707,
+      "message": "Survivor detected \u2014 MODERATE. Initiating triage protocol.",
+      "is_critical": false,
+      "type": "triage"
+    },
+    {
+      "step": 3,
+      "timestamp": 1773845548.4626806,
+      "message": "Auto-step \u2192 step 3",
+      "is_critical": false,
+      "type": "system"
+    },
+    {
+      "step": 3,
+      "timestamp": 1773845587.5212762,
+      "message": "Tool call: move_to(drone_id=\"drone_alpha\", x=3, y=2)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
-      "step": 1,
-      "timestamp": 1773670869.3017087,
-      "message": "Result [rescue_survivor]: [{'type': 'text', 'text': '{\\n  \"success\": true,\\n  \"drone_id\": \"drone_delta\",\\n  \"survivor_id\": 6,\\n  \"severity\": \"CRITICAL\",\\n  \"health\": 0.95,\\n  \"position\": [\\n    9,\\n    9\\n  ]\\n}', 'id': 'lc_75d7ade5-fe02-4b8e-9ece-eb0e1d38020a'}]",
+      "step": 3,
+      "timestamp": 1773845587.5212762,
+      "message": "Tool call: move_to(drone_id=\"drone_bravo\", x=10, y=4)",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 3,
+      "timestamp": 1773845587.5212762,
+      "message": "Tool call: move_to(drone_id=\"drone_delta\", x=9, y=9)",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 3,
+      "timestamp": 1773845587.5212762,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_alpha\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 3,
+      "timestamp": 1773845587.5212762,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_bravo\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 3,
+      "timestamp": 1773845587.5212762,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_charlie\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 3,
+      "timestamp": 1773845587.5212762,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_delta\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 3,
+      "timestamp": 1773845587.5212762,
+      "message": "Tool call: rescue_survivor(drone_id=\"drone_charlie\", survivor_id=7)",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 3,
+      "timestamp": 1773845587.5212762,
+      "message": "Tool call: rescue_survivor(drone_id=\"drone_delta\", survivor_id=8)",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 3,
+      "timestamp": 1773845587.5212762,
+      "message": "Tool call: rescue_survivor(drone_id=\"drone_bravo\", survivor_id=9)",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 3,
+      "timestamp": 1773845587.8000667,
+      "message": "Movement blocked \u2014 {\n  \"success\": false,\n  \"reason\": \"Can only move 1 cell at a time. Current: [4, 4], target: [3,2]\"\n}.",
+      "is_critical": true,
+      "type": "narrative"
+    },
+    {
+      "step": 3,
+      "timestamp": 1773845589.3255203,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 3,
+      "timestamp": 1773845589.5849764,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 3,
+      "timestamp": 1773845589.8674297,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 3,
+      "timestamp": 1773845590.124109,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 3,
+      "timestamp": 1773845590.4117522,
+      "message": "Survivor rescued successfully.",
       "is_critical": true,
       "type": "triage"
     },
     {
-      "step": 1,
-      "timestamp": 1773670870.735672,
-      "message": "Tool call: rescue_survivor(drone_id=drone_bravo, survivor_id=8)",
+      "step": 3,
+      "timestamp": 1773845590.6879077,
+      "message": "Survivor rescued successfully.",
+      "is_critical": true,
+      "type": "triage"
+    },
+    {
+      "step": 3,
+      "timestamp": 1773845590.954042,
+      "message": "Survivor rescued successfully.",
+      "is_critical": true,
+      "type": "triage"
+    },
+    {
+      "step": 4,
+      "timestamp": 1773845590.954042,
+      "message": "Auto-step \u2192 step 4",
+      "is_critical": false,
+      "type": "system"
+    },
+    {
+      "step": 4,
+      "timestamp": 1773845631.62534,
+      "message": "Tool call: coordinate_swarm()",
       "is_critical": false,
       "type": "tool_call"
     },
     {
-      "step": 1,
-      "timestamp": 1773670872.3851643,
-      "message": "Result [rescue_survivor]: [{'type': 'text', 'text': '{\\n  \"success\": true,\\n  \"drone_id\": \"drone_bravo\",\\n  \"survivor_id\": 8,\\n  \"severity\": \"MODERATE\",\\n  \"health\": 0.98,\\n  \"position\": [\\n    10,\\n    2\\n  ]\\n}', 'id': 'lc_a723e135-d3c5-4fbf-9af1-b6353f262576'}]",
-      "is_critical": false,
-      "type": "result"
-    },
-    {
-      "step": 1,
-      "timestamp": 1773670873.764928,
-      "message": "Tool call: rescue_survivor(drone_id=drone_charlie, survivor_id=7)",
+      "step": 4,
+      "timestamp": 1773845631.62534,
+      "message": "Tool call: move_to(drone_id=\"drone_alpha\", x=3, y=3)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
-      "step": 1,
-      "timestamp": 1773670875.3956044,
-      "message": "Result [rescue_survivor]: [{'type': 'text', 'text': '{\\n  \"success\": true,\\n  \"drone_id\": \"drone_charlie\",\\n  \"survivor_id\": 7,\\n  \"severity\": \"MODERATE\",\\n  \"health\": 0.98,\\n  \"position\": [\\n    3,\\n    10\\n  ]\\n}', 'id': 'lc_6be66510-a616-4ffa-8f73-07c25959517f'}]",
-      "is_critical": false,
-      "type": "result"
-    },
-    {
-      "step": 1,
-      "timestamp": 1773670876.4652102,
-      "message": "Tool call: advance_simulation(steps=1)",
+      "step": 4,
+      "timestamp": 1773845631.62534,
+      "message": "Tool call: move_to(drone_id=\"drone_bravo\", x=10, y=3)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
-      "step": 2,
-      "timestamp": 1773670878.1255124,
-      "message": "Result [advance_simulation]: [{'type': 'text', 'text': '{\\n  \"steps_advanced\": 1,\\n  \"new_mission_step\": 2,\\n  \"stats\": {\\n    \"total_survivors\": 5,\\n    \"found\": 4,\\n    \"alive\": 5,\\n    \"rescued\": 4,\\n    \"active_drones\": 4,\\n    \"total_drones\": 4,\\n    \"cells_scanned\": 46,\\n    \"total_cells\": 144,\\n    \"coverage_pct\": 31.9\\n...",
-      "is_critical": false,
-      "type": "result"
-    },
-    {
-      "step": 2,
-      "timestamp": 1773670879.0956502,
-      "message": "Tool call: get_priority_map()",
+      "step": 4,
+      "timestamp": 1773845631.62534,
+      "message": "Tool call: move_to(drone_id=\"drone_charlie\", x=2, y=9)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
-      "step": 2,
-      "timestamp": 1773670880.7855163,
-      "message": "Result [get_priority_map]: [{'type': 'text', 'text': '0.5', 'id': 'lc_7000c2d9-a94e-4a34-8194-0218f67bcee7'}, {'type': 'text', 'text': '0.5', 'id': 'lc_ef677b5c-b6f3-44c2-9cbf-d67beed149ae'}, {'type': 'text', 'text': '0.5', 'id': 'lc_c2963f31-224d-4efb-bc66-b2301c36592d'}, {'type': 'text', 'text': '0.5', 'id': 'lc_f0afe094-d1...",
+      "step": 4,
+      "timestamp": 1773845631.62534,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_alpha\")",
       "is_critical": false,
-      "type": "result"
+      "type": "tool_call"
     },
     {
-      "step": 2,
-      "timestamp": 1773670903.9051335,
+      "step": 4,
+      "timestamp": 1773845631.62534,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_bravo\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 4,
+      "timestamp": 1773845631.62534,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_charlie\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 4,
+      "timestamp": 1773845631.62534,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_delta\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 4,
+      "timestamp": 1773845631.62534,
+      "message": "Tool call: rescue_survivor(drone_id=\"drone_charlie\", survivor_id=7)",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 4,
+      "timestamp": 1773845631.8965168,
+      "message": "Swarm sectors assigned \u2014 drones dispersing for coverage.",
+      "is_critical": true,
+      "type": "narrative"
+    },
+    {
+      "step": 4,
+      "timestamp": 1773845633.7077343,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 4,
+      "timestamp": 1773845633.9790723,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 4,
+      "timestamp": 1773845634.2451165,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 4,
+      "timestamp": 1773845634.5121503,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 4,
+      "timestamp": 1773845634.7722926,
+      "message": "Survivor rescued successfully.",
+      "is_critical": true,
+      "type": "triage"
+    },
+    {
+      "step": 5,
+      "timestamp": 1773845634.7722926,
+      "message": "Auto-step \u2192 step 5",
+      "is_critical": false,
+      "type": "system"
+    },
+    {
+      "step": 5,
+      "timestamp": 1773845701.0477037,
+      "message": "Tool call: move_to(drone_id=\"drone_alpha\", x=3, y=2)",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 5,
+      "timestamp": 1773845701.0477037,
+      "message": "Tool call: move_to(drone_id=\"drone_bravo\", x=10, y=2)",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 5,
+      "timestamp": 1773845701.0477037,
+      "message": "Tool call: move_to(drone_id=\"drone_charlie\", x=3, y=9)",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 5,
+      "timestamp": 1773845701.0477037,
+      "message": "Tool call: move_to(drone_id=\"drone_delta\", x=9, y=8)",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 5,
+      "timestamp": 1773845701.0477037,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_alpha\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 5,
+      "timestamp": 1773845701.0477037,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_bravo\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 5,
+      "timestamp": 1773845701.0477037,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_charlie\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 5,
+      "timestamp": 1773845701.0477037,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_delta\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 5,
+      "timestamp": 1773845701.3250606,
+      "message": "Movement blocked \u2014 {\n  \"success\": false,\n  \"reason\": \"Can only move 1 cell at a time. Current: [3, 4], target: [3,2]\"\n}.",
+      "is_critical": true,
+      "type": "narrative"
+    },
+    {
+      "step": 5,
+      "timestamp": 1773845701.8541136,
+      "message": "Movement blocked \u2014 {\n  \"success\": false,\n  \"reason\": \"Can only move 1 cell at a time. Current: [10, 4], target: [10,2]\"\n}.",
+      "is_critical": true,
+      "type": "narrative"
+    },
+    {
+      "step": 5,
+      "timestamp": 1773845702.367203,
+      "message": "Movement blocked \u2014 {\n  \"success\": false,\n  \"reason\": \"Can only move 1 cell at a time. Current: [1, 8], target: [3,9]\"\n}.",
+      "is_critical": true,
+      "type": "narrative"
+    },
+    {
+      "step": 5,
+      "timestamp": 1773845703.424139,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 5,
+      "timestamp": 1773845703.6941183,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 5,
+      "timestamp": 1773845703.9651344,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 5,
+      "timestamp": 1773845704.2242317,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 6,
+      "timestamp": 1773845704.2242317,
+      "message": "Auto-step \u2192 step 6",
+      "is_critical": false,
+      "type": "system"
+    },
+    {
+      "step": 6,
+      "timestamp": 1773845752.1032166,
+      "message": "Tool call: move_to(drone_id=\"drone_alpha\", x=3, y=3)",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 6,
+      "timestamp": 1773845752.1032166,
+      "message": "Tool call: move_to(drone_id=\"drone_bravo\", x=10, y=3)",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 6,
+      "timestamp": 1773845752.1032166,
+      "message": "Tool call: move_to(drone_id=\"drone_charlie\", x=2, y=9)",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 6,
+      "timestamp": 1773845752.1032166,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_alpha\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 6,
+      "timestamp": 1773845752.1032166,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_bravo\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 6,
+      "timestamp": 1773845752.1032166,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_charlie\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 6,
+      "timestamp": 1773845752.1032166,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_delta\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 6,
+      "timestamp": 1773845754.0746515,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 6,
+      "timestamp": 1773845754.4622085,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 6,
+      "timestamp": 1773845754.775448,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 6,
+      "timestamp": 1773845755.1322856,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 7,
+      "timestamp": 1773845755.237931,
+      "message": "Auto-step \u2192 step 7",
+      "is_critical": false,
+      "type": "system"
+    },
+    {
+      "step": 7,
+      "timestamp": 1773845790.400184,
       "message": "Tool call: discover_drones()",
       "is_critical": false,
       "type": "tool_call"
     },
     {
-      "step": 2,
-      "timestamp": 1773670905.56037,
-      "message": "Result [discover_drones]: [{'type': 'text', 'text': '{\\n  \"drone_id\": \"drone_alpha\",\\n  \"position\": [\\n    2,\\n    2\\n  ],\\n  \"battery\": 91,\\n  \"status\": \"active\",\\n  \"connected\": true,\\n  \"is_relay\": false,\\n  \"comm_range\": 4,\\n  \"assigned_sector\": [\\n    0,\\n    0,\\n    6,\\n    6\\n  ],\\n  \"findings_buffer_size\": 1\\n}', 'id...",
-      "is_critical": false,
-      "type": "result"
-    },
-    {
-      "step": 2,
-      "timestamp": 1773670923.2912877,
+      "step": 7,
+      "timestamp": 1773845790.400184,
       "message": "Tool call: coordinate_swarm()",
       "is_critical": false,
       "type": "tool_call"
     },
     {
-      "step": 2,
-      "timestamp": 1773670924.9698672,
-      "message": "Result [coordinate_swarm]: [{'type': 'text', 'text': '{\\n  \"success\": true,\\n  \"assignments\": {\\n    \"drone_alpha\": [\\n      0,\\n      0,\\n      6,\\n      6\\n    ],\\n    \"drone_bravo\": [\\n      6,\\n      0,\\n      6,\\n      6\\n    ],\\n    \"drone_charlie\": [\\n      0,\\n      6,\\n      6,\\n      6\\n    ],\\n    \"drone_delta\": [\\...",
-      "is_critical": false,
-      "type": "result"
-    },
-    {
-      "step": 2,
-      "timestamp": 1773670942.7367601,
-      "message": "Tool call: get_mission_summary()",
+      "step": 7,
+      "timestamp": 1773845790.400184,
+      "message": "Tool call: move_to(drone_id=\"drone_alpha\", x=2, y=2)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
-      "step": 2,
-      "timestamp": 1773670944.36109,
-      "message": "Result [get_mission_summary]: [{'type': 'text', 'text': '{\\n  \"mission_step\": 2,\\n  \"stats\": {\\n    \"total_survivors\": 5,\\n    \"found\": 4,\\n    \"alive\": 5,\\n    \"rescued\": 4,\\n    \"active_drones\": 4,\\n    \"total_drones\": 4,\\n    \"cells_scanned\": 46,\\n    \"total_cells\": 144,\\n    \"coverage_pct\": 31.9\\n  },\\n  \"drone_summaries\": [...",
-      "is_critical": false,
-      "type": "result"
-    },
-    {
-      "step": 2,
-      "timestamp": 1773670967.3612485,
-      "message": "Tool call: move_to(drone_id=drone_alpha, x=4, y=4)",
+      "step": 7,
+      "timestamp": 1773845790.400184,
+      "message": "Tool call: move_to(drone_id=\"drone_bravo\", x=10, y=2)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
-      "step": 2,
-      "timestamp": 1773670967.3612485,
-      "message": "Tool call: move_to(drone_id=drone_bravo, x=11, y=2)",
+      "step": 7,
+      "timestamp": 1773845790.400184,
+      "message": "Tool call: move_to(drone_id=\"drone_charlie\", x=3, y=9)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
-      "step": 2,
-      "timestamp": 1773670967.3612485,
-      "message": "Tool call: move_to(drone_id=drone_charlie, x=2, y=9)",
+      "step": 7,
+      "timestamp": 1773845790.400184,
+      "message": "Tool call: move_to(drone_id=\"drone_delta\", x=9, y=8)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
-      "step": 2,
-      "timestamp": 1773670967.3612485,
-      "message": "Tool call: move_to(drone_id=drone_delta, x=10, y=10)",
+      "step": 7,
+      "timestamp": 1773845790.400184,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_alpha\")",
       "is_critical": false,
       "type": "tool_call"
     },
     {
-      "step": 2,
-      "timestamp": 1773670970.0331874,
-      "message": "Result [move_to]: [{'type': 'text', 'text': '{\\n  \"success\": true,\\n  \"position\": [\\n    4,\\n    4\\n  ],\\n  \"battery\": 89\\n}', 'id': 'lc_01e11cde-f02b-4ef5-b358-8a7f1fdd5cd3'}]",
-      "is_critical": false,
-      "type": "result"
-    },
-    {
-      "step": 2,
-      "timestamp": 1773670970.0331874,
-      "message": "Result [move_to]: [{'type': 'text', 'text': '{\\n  \"success\": true,\\n  \"position\": [\\n    11,\\n    2\\n  ],\\n  \"battery\": 82\\n}', 'id': 'lc_12eda646-a049-4a49-84a4-fbfa1593622a'}]",
-      "is_critical": false,
-      "type": "result"
-    },
-    {
-      "step": 2,
-      "timestamp": 1773670970.0331874,
-      "message": "Result [move_to]: [{'type': 'text', 'text': '{\\n  \"success\": true,\\n  \"position\": [\\n    2,\\n    9\\n  ],\\n  \"battery\": 84\\n}', 'id': 'lc_e2c45b6f-032e-49b1-afb8-cacf3b1c9fb8'}]",
-      "is_critical": false,
-      "type": "result"
-    },
-    {
-      "step": 2,
-      "timestamp": 1773670970.0331874,
-      "message": "Result [move_to]: [{'type': 'text', 'text': '{\\n  \"success\": true,\\n  \"position\": [\\n    10,\\n    10\\n  ],\\n  \"battery\": 89\\n}', 'id': 'lc_bcd7d234-b56a-4c77-9a09-0556dbac8b0d'}]",
-      "is_critical": false,
-      "type": "result"
-    },
-    {
-      "step": 2,
-      "timestamp": 1773670971.1111176,
-      "message": "Tool call: thermal_scan(drone_id=drone_alpha)",
+      "step": 7,
+      "timestamp": 1773845790.400184,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_bravo\")",
       "is_critical": false,
       "type": "tool_call"
     },
     {
-      "step": 2,
-      "timestamp": 1773670972.831489,
-      "message": "Result [thermal_scan]: [{'type': 'text', 'text': '{\\n  \"success\": true,\\n  \"position\": [\\n    4,\\n    4\\n  ],\\n  \"survivors_found\": [],\\n  \"cells_scanned\": 9,\\n  \"battery\": 86\\n}', 'id': 'lc_b80036dc-4fa1-428a-a9f3-2051022ecae1'}]",
-      "is_critical": false,
-      "type": "result"
-    },
-    {
-      "step": 2,
-      "timestamp": 1773670973.9309459,
-      "message": "Tool call: thermal_scan(drone_id=drone_bravo)",
+      "step": 7,
+      "timestamp": 1773845790.400184,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_charlie\")",
       "is_critical": false,
       "type": "tool_call"
     },
     {
-      "step": 2,
-      "timestamp": 1773670975.5975368,
-      "message": "Result [thermal_scan]: [{'type': 'text', 'text': '{\\n  \"success\": true,\\n  \"position\": [\\n    11,\\n    2\\n  ],\\n  \"survivors_found\": [],\\n  \"cells_scanned\": 9,\\n  \"battery\": 79\\n}', 'id': 'lc_30aab917-7883-4010-bf82-74412385a472'}]",
-      "is_critical": false,
-      "type": "result"
-    },
-    {
-      "step": 2,
-      "timestamp": 1773670976.701522,
-      "message": "Tool call: thermal_scan(drone_id=drone_charlie)",
+      "step": 7,
+      "timestamp": 1773845790.400184,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_delta\")",
       "is_critical": false,
       "type": "tool_call"
     },
     {
-      "step": 2,
-      "timestamp": 1773670978.3558602,
-      "message": "Result [thermal_scan]: [{'type': 'text', 'text': '{\\n  \"success\": true,\\n  \"position\": [\\n    2,\\n    9\\n  ],\\n  \"survivors_found\": [],\\n  \"cells_scanned\": 9,\\n  \"battery\": 81\\n}', 'id': 'lc_625dc6e6-c135-482e-a0ef-69332777fc55'}]",
-      "is_critical": false,
-      "type": "result"
+      "step": 7,
+      "timestamp": 1773845790.7114315,
+      "message": "Fleet online \u2014 4 drones reporting for duty.",
+      "is_critical": true,
+      "type": "narrative"
     },
     {
-      "step": 2,
-      "timestamp": 1773670979.41758,
-      "message": "Tool call: thermal_scan(drone_id=drone_delta)",
+      "step": 7,
+      "timestamp": 1773845790.9849744,
+      "message": "Swarm sectors assigned \u2014 drones dispersing for coverage.",
+      "is_critical": true,
+      "type": "narrative"
+    },
+    {
+      "step": 7,
+      "timestamp": 1773845791.276508,
+      "message": "Movement blocked \u2014 {\n  \"success\": false,\n  \"reason\": \"Can only move 1 cell at a time. Current: [3, 4], target: [2,2]\"\n}.",
+      "is_critical": true,
+      "type": "narrative"
+    },
+    {
+      "step": 7,
+      "timestamp": 1773845791.8089106,
+      "message": "Movement blocked \u2014 {\n  \"success\": false,\n  \"reason\": \"Can only move 1 cell at a time. Current: [10, 4], target: [10,2]\"\n}.",
+      "is_critical": true,
+      "type": "narrative"
+    },
+    {
+      "step": 7,
+      "timestamp": 1773845792.3402314,
+      "message": "Movement blocked \u2014 {\n  \"success\": false,\n  \"reason\": \"Can only move 1 cell at a time. Current: [1, 8], target: [3,9]\"\n}.",
+      "is_critical": true,
+      "type": "narrative"
+    },
+    {
+      "step": 7,
+      "timestamp": 1773845793.3847744,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 7,
+      "timestamp": 1773845793.6471817,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 7,
+      "timestamp": 1773845793.939951,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 7,
+      "timestamp": 1773845794.2199283,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 8,
+      "timestamp": 1773845794.2199283,
+      "message": "Auto-step \u2192 step 8",
+      "is_critical": false,
+      "type": "system"
+    },
+    {
+      "step": 8,
+      "timestamp": 1773845821.2768314,
+      "message": "Tool call: move_to(drone_id=\"drone_alpha\", x=3, y=3)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
-      "step": 2,
-      "timestamp": 1773670981.071962,
-      "message": "Result [thermal_scan]: [{'type': 'text', 'text': '{\\n  \"success\": true,\\n  \"position\": [\\n    10,\\n    10\\n  ],\\n  \"survivors_found\": [],\\n  \"cells_scanned\": 9,\\n  \"battery\": 86\\n}', 'id': 'lc_b0839aba-fb5e-4c7c-870c-f756d4877f98'}]",
+      "step": 8,
+      "timestamp": 1773845821.2768314,
+      "message": "Tool call: move_to(drone_id=\"drone_bravo\", x=10, y=3)",
       "is_critical": false,
-      "type": "result"
+      "type": "tool_call"
     },
     {
-      "step": 2,
-      "timestamp": 1773670982.1923938,
+      "step": 8,
+      "timestamp": 1773845821.2768314,
+      "message": "Tool call: move_to(drone_id=\"drone_charlie\", x=2, y=9)",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 8,
+      "timestamp": 1773845821.2768314,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_alpha\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 8,
+      "timestamp": 1773845821.2768314,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_bravo\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 8,
+      "timestamp": 1773845821.2768314,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_charlie\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 8,
+      "timestamp": 1773845821.2768314,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_delta\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 8,
+      "timestamp": 1773845823.1278133,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 8,
+      "timestamp": 1773845823.3970323,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 8,
+      "timestamp": 1773845823.6664062,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 8,
+      "timestamp": 1773845823.9425354,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 9,
+      "timestamp": 1773845823.946569,
+      "message": "Auto-step \u2192 step 9",
+      "is_critical": false,
+      "type": "system"
+    },
+    {
+      "step": 9,
+      "timestamp": 1773845832.6900718,
       "message": "Tool call: advance_simulation(steps=1)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
-      "step": 3,
-      "timestamp": 1773670983.8429897,
-      "message": "Result [advance_simulation]: [{'type': 'text', 'text': '{\\n  \"steps_advanced\": 1,\\n  \"new_mission_step\": 3,\\n  \"stats\": {\\n    \"total_survivors\": 5,\\n    \"found\": 4,\\n    \"alive\": 5,\\n    \"rescued\": 4,\\n    \"active_drones\": 4,\\n    \"total_drones\": 4,\\n    \"cells_scanned\": 61,\\n    \"total_cells\": 144,\\n    \"coverage_pct\": 42.4\\n...",
+      "step": 10,
+      "timestamp": 1773845832.958258,
+      "message": "Step advanced: {\n  \"steps_advanced\": 1,\n  \"new_mission_step\": 10,\n  \"stats\": {\n    \"total_survivors\": 5,\n    \"found\": 5,\n    \"alive\": 5,\n    \"rescued\": 5,\n    \"activ",
       "is_critical": false,
-      "type": "result"
+      "type": "system"
     },
     {
-      "step": 3,
-      "timestamp": 1773670985.0232213,
-      "message": "Tool call: get_priority_map()",
-      "is_critical": false,
-      "type": "tool_call"
-    },
-    {
-      "step": 3,
-      "timestamp": 1773670986.7248406,
-      "message": "Result [get_priority_map]: [{'type': 'text', 'text': '0.5', 'id': 'lc_f900670f-b842-4045-a1de-01fd6a016ee7'}, {'type': 'text', 'text': '0.5', 'id': 'lc_ef71a14a-8ad0-4793-8494-985e9bc9277f'}, {'type': 'text', 'text': '0.5', 'id': 'lc_8636054e-b0f1-4f60-9d89-c7ba18f535a8'}, {'type': 'text', 'text': '0.5', 'id': 'lc_0742d1e9-a5...",
-      "is_critical": false,
-      "type": "result"
-    },
-    {
-      "step": 3,
-      "timestamp": 1773670987.7240572,
-      "message": "Tool call: get_mission_summary()",
+      "step": 10,
+      "timestamp": 1773845877.6313016,
+      "message": "Tool call: sync_findings(drone_id=\"drone_delta\")",
       "is_critical": false,
       "type": "tool_call"
     },
     {
-      "step": 3,
-      "timestamp": 1773670989.5406425,
-      "message": "Result [get_mission_summary]: [{'type': 'text', 'text': '{\\n  \"mission_step\": 3,\\n  \"stats\": {\\n    \"total_survivors\": 5,\\n    \"found\": 4,\\n    \"alive\": 5,\\n    \"rescued\": 4,\\n    \"active_drones\": 4,\\n    \"total_drones\": 4,\\n    \"cells_scanned\": 61,\\n    \"total_cells\": 144,\\n    \"coverage_pct\": 42.4\\n  },\\n  \"drone_summaries\": [...",
-      "is_critical": false,
-      "type": "result"
-    },
-    {
-      "step": 3,
-      "timestamp": 1773671013.7045243,
-      "message": "Tool call: move_to(drone_id=drone_alpha, x=6, y=5)",
+      "step": 10,
+      "timestamp": 1773845877.6313016,
+      "message": "Tool call: sync_findings(drone_id=\"drone_bravo\")",
       "is_critical": false,
       "type": "tool_call"
     },
     {
-      "step": 3,
-      "timestamp": 1773671013.7045243,
-      "message": "Tool call: move_to(drone_id=drone_bravo, x=11, y=3)",
+      "step": 10,
+      "timestamp": 1773845877.6313016,
+      "message": "Tool call: sync_findings(drone_id=\"drone_charlie\")",
       "is_critical": false,
       "type": "tool_call"
     },
     {
-      "step": 3,
-      "timestamp": 1773671013.7045243,
-      "message": "Tool call: move_to(drone_id=drone_charlie, x=1, y=8)",
+      "step": 10,
+      "timestamp": 1773845877.6313016,
+      "message": "Tool call: move_to(drone_id=\"drone_alpha\", x=2, y=3)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
-      "step": 3,
-      "timestamp": 1773671013.7045243,
-      "message": "Tool call: move_to(drone_id=drone_delta, x=10, y=11)",
+      "step": 10,
+      "timestamp": 1773845877.6313016,
+      "message": "Tool call: move_to(drone_id=\"drone_bravo\", x=10, y=2)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
-      "step": 3,
-      "timestamp": 1773671016.4469779,
-      "message": "Result [move_to]: [{'type': 'text', 'text': '{\\n  \"success\": true,\\n  \"position\": [\\n    6,\\n    5\\n  ],\\n  \"battery\": 83\\n}', 'id': 'lc_1fdca126-4bed-4971-beac-e9b042e3a7e9'}]",
-      "is_critical": false,
-      "type": "result"
-    },
-    {
-      "step": 3,
-      "timestamp": 1773671016.4469779,
-      "message": "Result [move_to]: [{'type': 'text', 'text': '{\\n  \"success\": true,\\n  \"position\": [\\n    11,\\n    3\\n  ],\\n  \"battery\": 74\\n}', 'id': 'lc_c5bd724d-9100-442f-8053-c028bc22f33b'}]",
-      "is_critical": false,
-      "type": "result"
-    },
-    {
-      "step": 3,
-      "timestamp": 1773671016.4469779,
-      "message": "Result [move_to]: [{'type': 'text', 'text': '{\\n  \"success\": true,\\n  \"position\": [\\n    1,\\n    8\\n  ],\\n  \"battery\": 76\\n}', 'id': 'lc_ba8657ad-b384-4bec-8d45-0d88a1d721d6'}]",
-      "is_critical": false,
-      "type": "result"
-    },
-    {
-      "step": 3,
-      "timestamp": 1773671016.4469779,
-      "message": "Result [move_to]: [{'type': 'text', 'text': '{\\n  \"success\": true,\\n  \"position\": [\\n    10,\\n    11\\n  ],\\n  \"battery\": 81\\n}', 'id': 'lc_9f6f8eb6-afaa-42f8-9e7a-33b94d813372'}]",
-      "is_critical": false,
-      "type": "result"
-    },
-    {
-      "step": 3,
-      "timestamp": 1773671017.637852,
-      "message": "Tool call: thermal_scan(drone_id=drone_alpha)",
+      "step": 10,
+      "timestamp": 1773845877.6313016,
+      "message": "Tool call: move_to(drone_id=\"drone_charlie\", x=3, y=10)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
-      "step": 3,
-      "timestamp": 1773671019.2474174,
-      "message": "Result [thermal_scan]: [{'type': 'text', 'text': '{\\n  \"success\": true,\\n  \"position\": [\\n    6,\\n    5\\n  ],\\n  \"survivors_found\": [\\n    {\\n      \"survivor_id\": 9,\\n      \"position\": [\\n        6,\\n        6\\n      ],\\n      \"severity\": \"STABLE\",\\n      \"health\": 0.97\\n    }\\n  ],\\n  \"cells_scanned\": 9,\\n  \"battery\": 80...",
-      "is_critical": false,
-      "type": "result"
-    },
-    {
-      "step": 3,
-      "timestamp": 1773671020.3682103,
-      "message": "Tool call: rescue_survivor(drone_id=drone_alpha, survivor_id=9)",
+      "step": 10,
+      "timestamp": 1773845877.6313016,
+      "message": "Tool call: move_to(drone_id=\"drone_delta\", x=8, y=9)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
-      "step": 3,
-      "timestamp": 1773671022.0146315,
-      "message": "Result [rescue_survivor]: [{'type': 'text', 'text': '{\\n  \"success\": false,\\n  \"reason\": \"drone at [6, 5], survivor at [6, 6] \u2014 must be same cell\"\\n}', 'id': 'lc_de9936f1-e693-40c2-8d7e-1d2d77311159'}]",
-      "is_critical": false,
-      "type": "result"
-    },
-    {
-      "step": 3,
-      "timestamp": 1773671024.6130643,
-      "message": "Tool call: move_to(drone_id=drone_alpha, x=6, y=6)",
+      "step": 10,
+      "timestamp": 1773845877.6313016,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_alpha\")",
       "is_critical": false,
       "type": "tool_call"
     },
     {
-      "step": 3,
-      "timestamp": 1773671026.3001723,
-      "message": "Result [move_to]: [{'type': 'text', 'text': '{\\n  \"success\": true,\\n  \"position\": [\\n    6,\\n    6\\n  ],\\n  \"battery\": 78\\n}', 'id': 'lc_b1f2cac5-e41a-4dc1-ba1e-3a8d74a9a290'}]",
-      "is_critical": false,
-      "type": "result"
-    },
-    {
-      "step": 3,
-      "timestamp": 1773671027.3981965,
-      "message": "Tool call: rescue_survivor(drone_id=drone_alpha, survivor_id=9)",
+      "step": 10,
+      "timestamp": 1773845877.6313016,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_bravo\")",
       "is_critical": false,
       "type": "tool_call"
     },
     {
-      "step": 3,
-      "timestamp": 1773671029.0615542,
-      "message": "Result [rescue_survivor]: [{'type': 'text', 'text': '{\\n  \"success\": true,\\n  \"drone_id\": \"drone_alpha\",\\n  \"survivor_id\": 9,\\n  \"severity\": \"STABLE\",\\n  \"health\": 0.97,\\n  \"position\": [\\n    6,\\n    6\\n  ]\\n}', 'id': 'lc_4f215742-b51a-4bb1-b66b-8ee6dee02b37'}]",
-      "is_critical": false,
-      "type": "result"
-    },
-    {
-      "step": 3,
-      "timestamp": 1773671030.1611779,
-      "message": "Tool call: thermal_scan(drone_id=drone_bravo)",
+      "step": 10,
+      "timestamp": 1773845877.6313016,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_charlie\")",
       "is_critical": false,
       "type": "tool_call"
     },
     {
-      "step": 3,
-      "timestamp": 1773671031.8320844,
-      "message": "Result [thermal_scan]: [{'type': 'text', 'text': '{\\n  \"success\": true,\\n  \"position\": [\\n    11,\\n    3\\n  ],\\n  \"survivors_found\": [],\\n  \"cells_scanned\": 9,\\n  \"battery\": 71\\n}', 'id': 'lc_9094f137-4947-488c-91f6-1d0c75fdc4dd'}]",
-      "is_critical": false,
-      "type": "result"
-    },
-    {
-      "step": 3,
-      "timestamp": 1773671033.023532,
-      "message": "Tool call: thermal_scan(drone_id=drone_charlie)",
+      "step": 10,
+      "timestamp": 1773845877.6313016,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_delta\")",
       "is_critical": false,
       "type": "tool_call"
     },
     {
-      "step": 3,
-      "timestamp": 1773671034.6912029,
-      "message": "Result [thermal_scan]: [{'type': 'text', 'text': '{\\n  \"success\": true,\\n  \"position\": [\\n    1,\\n    8\\n  ],\\n  \"survivors_found\": [],\\n  \"cells_scanned\": 9,\\n  \"battery\": 73\\n}', 'id': 'lc_3bcda87b-903d-4870-8cac-1b2ee3d74ddd'}]",
-      "is_critical": false,
-      "type": "result"
+      "step": 10,
+      "timestamp": 1773845877.922034,
+      "message": "Buffered findings synced \u2014 8 reports recovered.",
+      "is_critical": true,
+      "type": "narrative"
     },
     {
-      "step": 3,
-      "timestamp": 1773671035.6952875,
-      "message": "Tool call: thermal_scan(drone_id=drone_delta)",
+      "step": 10,
+      "timestamp": 1773845878.1930957,
+      "message": "Buffered findings synced \u2014 10 reports recovered.",
+      "is_critical": true,
+      "type": "narrative"
+    },
+    {
+      "step": 10,
+      "timestamp": 1773845878.448479,
+      "message": "Buffered findings synced \u2014 2 reports recovered.",
+      "is_critical": true,
+      "type": "narrative"
+    },
+    {
+      "step": 10,
+      "timestamp": 1773845880.8548896,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 10,
+      "timestamp": 1773845881.1384604,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 10,
+      "timestamp": 1773845881.4016945,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 10,
+      "timestamp": 1773845881.6826315,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 11,
+      "timestamp": 1773845881.6962523,
+      "message": "Auto-step \u2192 step 11",
+      "is_critical": false,
+      "type": "system"
+    },
+    {
+      "step": 11,
+      "timestamp": 1773845939.1854026,
+      "message": "Tool call: coordinate_swarm()",
       "is_critical": false,
       "type": "tool_call"
     },
     {
-      "step": 3,
-      "timestamp": 1773671037.3527362,
-      "message": "Result [thermal_scan]: [{'type': 'text', 'text': '{\\n  \"success\": true,\\n  \"position\": [\\n    10,\\n    11\\n  ],\\n  \"survivors_found\": [],\\n  \"cells_scanned\": 9,\\n  \"battery\": 78\\n}', 'id': 'lc_09d933a0-334d-4355-b89c-278a62901955'}]",
-      "is_critical": false,
-      "type": "result"
+      "step": 11,
+      "timestamp": 1773845939.4493003,
+      "message": "Swarm sectors assigned \u2014 drones dispersing for coverage.",
+      "is_critical": true,
+      "type": "narrative"
     },
     {
-      "step": 3,
-      "timestamp": 1773671038.2867508,
-      "message": "Tool call: advance_simulation(steps=1)",
+      "step": 11,
+      "timestamp": 1773845971.003104,
+      "message": "Tool call: discover_drones()",
       "is_critical": false,
       "type": "tool_call"
     },
     {
-      "step": 4,
-      "timestamp": 1773671039.9457395,
-      "message": "Result [advance_simulation]: [{'type': 'text', 'text': '{\\n  \"steps_advanced\": 1,\\n  \"new_mission_step\": 4,\\n  \"stats\": {\\n    \"total_survivors\": 5,\\n    \"found\": 5,\\n    \"alive\": 5,\\n    \"rescued\": 5,\\n    \"active_drones\": 4,\\n    \"total_drones\": 4,\\n    \"cells_scanned\": 80,\\n    \"total_cells\": 144,\\n    \"coverage_pct\": 55.6\\n...",
-      "is_critical": false,
-      "type": "result"
+      "step": 11,
+      "timestamp": 1773845971.290594,
+      "message": "Fleet online \u2014 4 drones reporting for duty.",
+      "is_critical": true,
+      "type": "narrative"
     },
     {
-      "step": 4,
-      "timestamp": 1773671056.929091,
-      "message": "Mission complete \u2014 all 5 survivors found and rescued by step 4; continuing search unnecessary. Drones remain active and no immediate recall required.\n\nSummary:\n- Survivors rescued: IDs 5, 6, 7, 8, 9 \u2014 all alive and rescued.\n- Timeline: Mission ended at step 4, coverage 55.6% (80/144 cells scanned).\n- Drone statuses (last known): drone_alpha pos=(6,6) battery\u224878%; drone_bravo pos=(11,3) battery\u224871%; drone_charlie pos=(1,8) battery\u224873%; drone_delta pos=(10,11) battery\u224878%.\n- No recent disaster events or blackouts; mesh stable.\n\nAction log (concise): coordinated swarm scanning, prioritized high-probability structures, scanned immediately on arrival, and performed immediate rescues upon detection. Mission closed.",
+      "step": 11,
+      "timestamp": 1773846020.7357855,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_alpha\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 11,
+      "timestamp": 1773846020.7357855,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_bravo\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 11,
+      "timestamp": 1773846020.7357855,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_charlie\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 11,
+      "timestamp": 1773846020.7357855,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_delta\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 11,
+      "timestamp": 1773846020.7357855,
+      "message": "Tool call: move_to(drone_id=\"drone_alpha\", x=2, y=3)",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 11,
+      "timestamp": 1773846020.7357855,
+      "message": "Tool call: move_to(drone_id=\"drone_bravo\", x=10, y=4)",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 11,
+      "timestamp": 1773846020.7357855,
+      "message": "Tool call: rescue_survivor(drone_id=\"drone_charlie\", survivor_id=7)",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 11,
+      "timestamp": 1773846020.7357855,
+      "message": "Tool call: rescue_survivor(drone_id=\"drone_delta\", survivor_id=8)",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 11,
+      "timestamp": 1773846020.7357855,
+      "message": "Tool call: rescue_survivor(drone_id=\"drone_bravo\", survivor_id=9)",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 11,
+      "timestamp": 1773846021.0108178,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 11,
+      "timestamp": 1773846021.2763717,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 11,
+      "timestamp": 1773846021.5350902,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 11,
+      "timestamp": 1773846021.7851665,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 11,
+      "timestamp": 1773846023.0895498,
+      "message": "Survivor rescued successfully.",
       "is_critical": true,
       "type": "triage"
+    },
+    {
+      "step": 11,
+      "timestamp": 1773846023.3568115,
+      "message": "Survivor rescued successfully.",
+      "is_critical": true,
+      "type": "triage"
+    },
+    {
+      "step": 11,
+      "timestamp": 1773846023.6439903,
+      "message": "Survivor rescued successfully.",
+      "is_critical": true,
+      "type": "triage"
+    },
+    {
+      "step": 12,
+      "timestamp": 1773846023.654985,
+      "message": "Auto-step \u2192 step 12",
+      "is_critical": false,
+      "type": "system"
+    },
+    {
+      "step": 12,
+      "timestamp": 1773846057.8998075,
+      "message": "Tool call: coordinate_swarm()",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 12,
+      "timestamp": 1773846058.1695378,
+      "message": "Swarm sectors assigned \u2014 drones dispersing for coverage.",
+      "is_critical": true,
+      "type": "narrative"
+    },
+    {
+      "step": 12,
+      "timestamp": 1773846079.722393,
+      "message": "Tool call: discover_drones()",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 12,
+      "timestamp": 1773846079.9852114,
+      "message": "Fleet online \u2014 4 drones reporting for duty.",
+      "is_critical": true,
+      "type": "narrative"
+    },
+    {
+      "step": 12,
+      "timestamp": 1773846116.134968,
+      "message": "Tool call: move_to(drone_id=\"drone_charlie\", x=2, y=9)",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 12,
+      "timestamp": 1773846116.134968,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_alpha\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 12,
+      "timestamp": 1773846116.134968,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_charlie\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 12,
+      "timestamp": 1773846116.134968,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_delta\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 12,
+      "timestamp": 1773846116.134968,
+      "message": "Tool call: recall_drone(drone_id=\"drone_bravo\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 12,
+      "timestamp": 1773846117.3237343,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 12,
+      "timestamp": 1773846117.5909202,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 12,
+      "timestamp": 1773846117.849218,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 12,
+      "timestamp": 1773846118.110855,
+      "message": "Drone id recalled to base \u2014 RTB engaged.",
+      "is_critical": true,
+      "type": "narrative"
+    },
+    {
+      "step": 13,
+      "timestamp": 1773846118.110855,
+      "message": "Auto-step \u2192 step 13",
+      "is_critical": false,
+      "type": "system"
+    },
+    {
+      "step": 13,
+      "timestamp": 1773846180.6481855,
+      "message": "Tool call: move_to(drone_id=\"drone_alpha\", x=2, y=3)",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 13,
+      "timestamp": 1773846180.6481855,
+      "message": "Tool call: move_to(drone_id=\"drone_charlie\", x=3, y=9)",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 13,
+      "timestamp": 1773846180.6481855,
+      "message": "Tool call: move_to(drone_id=\"drone_delta\", x=9, y=9)",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 13,
+      "timestamp": 1773846180.6481855,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_alpha\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 13,
+      "timestamp": 1773846180.6481855,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_charlie\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 13,
+      "timestamp": 1773846180.6481855,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_delta\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 13,
+      "timestamp": 1773846181.4602704,
+      "message": "Movement blocked \u2014 {\n  \"success\": false,\n  \"reason\": \"Can only move 1 cell at a time. Current: [1, 8], target: [3,9]\"\n}.",
+      "is_critical": true,
+      "type": "narrative"
+    },
+    {
+      "step": 13,
+      "timestamp": 1773846182.5045779,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 13,
+      "timestamp": 1773846182.7999284,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 13,
+      "timestamp": 1773846183.109895,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 14,
+      "timestamp": 1773846183.1145086,
+      "message": "Auto-step \u2192 step 14",
+      "is_critical": false,
+      "type": "system"
+    },
+    {
+      "step": 14,
+      "timestamp": 1773846209.9894888,
+      "message": "Tool call: discover_drones()",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 14,
+      "timestamp": 1773846209.9894888,
+      "message": "Tool call: coordinate_swarm()",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 14,
+      "timestamp": 1773846209.9894888,
+      "message": "Tool call: move_to(drone_id=\"drone_alpha\", x=2, y=2)",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 14,
+      "timestamp": 1773846209.9894888,
+      "message": "Tool call: move_to(drone_id=\"drone_charlie\", x=2, y=9)",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 14,
+      "timestamp": 1773846209.9894888,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_alpha\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 14,
+      "timestamp": 1773846209.9894888,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_charlie\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 14,
+      "timestamp": 1773846209.9894888,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_delta\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 14,
+      "timestamp": 1773846209.9894888,
+      "message": "Tool call: recall_drone(drone_id=\"drone_alpha\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 14,
+      "timestamp": 1773846209.9894888,
+      "message": "Tool call: recall_drone(drone_id=\"drone_charlie\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 14,
+      "timestamp": 1773846209.9894888,
+      "message": "Tool call: recall_drone(drone_id=\"drone_delta\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 14,
+      "timestamp": 1773846210.256861,
+      "message": "Fleet online \u2014 4 drones reporting for duty.",
+      "is_critical": true,
+      "type": "narrative"
+    },
+    {
+      "step": 14,
+      "timestamp": 1773846210.5170374,
+      "message": "Swarm sectors assigned \u2014 drones dispersing for coverage.",
+      "is_critical": true,
+      "type": "narrative"
+    },
+    {
+      "step": 14,
+      "timestamp": 1773846211.8230758,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 14,
+      "timestamp": 1773846212.083642,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 14,
+      "timestamp": 1773846212.3416412,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 14,
+      "timestamp": 1773846212.6023314,
+      "message": "Drone id recalled to base \u2014 RTB engaged.",
+      "is_critical": true,
+      "type": "narrative"
+    },
+    {
+      "step": 14,
+      "timestamp": 1773846212.861652,
+      "message": "Drone id recalled to base \u2014 RTB engaged.",
+      "is_critical": true,
+      "type": "narrative"
+    },
+    {
+      "step": 14,
+      "timestamp": 1773846213.1469996,
+      "message": "Drone id recalled to base \u2014 RTB engaged.",
+      "is_critical": true,
+      "type": "narrative"
+    },
+    {
+      "step": 15,
+      "timestamp": 1773846213.1500142,
+      "message": "Auto-step \u2192 step 15",
+      "is_critical": false,
+      "type": "system"
+    },
+    {
+      "step": 15,
+      "timestamp": 1773846217.1884992,
+      "message": "Tool call: get_mission_summary()",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 15,
+      "timestamp": 1773846217.4525108,
+      "message": "Result [get_mission_summary]: {\n  \"mission_step\": 15,\n  \"stats\": {\n    \"total_survivors\": 5,\n    \"found\": 5,\n    \"alive\": 5,\n    \"rescued\": 5,\n    \"active_drones\": 0,\n    \"total_drones\": 4,\n    \"cells_scanned\": 89,\n    \"total_cells\": 144,\n    \"coverage_pct\": 61.8\n  },\n  \"drone_summaries\": [\n    \"drone_alpha: battery=6%, status=r...",
+      "is_critical": false,
+      "type": "result"
+    },
+    {
+      "step": 15,
+      "timestamp": 1773846225.122361,
+      "message": "Commander report: mission complete.\n\nBrief intent & outcome: I committed the 4-drone swarm to the four building clusters, scanned aggressively, and executed immediate rescues \u2014 all survivors located were rescued before mission end.\n\nFinal summary:\n- Survivors: 5 total \u2014 5 found, 5 rescued, 5 alive (100% success).\n- Grid coverage: 61.8% scanned (89/144 cells).\n- Disaster events encountered: blackout (step 6, radius 3), blackout cleared (step 9), aftershock (step 4), rising water (step 11). All handled without loss of survivors.\n- Drone statuses (final):\n  - drone_alpha: battery 6%, status returning, pos=(3,3), disconnected earlier but findings synced.\n  - drone_bravo: battery 6%, status returning, pos=(6,5).\n  - drone_charlie: battery 8%, status returning, pos=(3,8), disconnected earlier but synced.\n  - drone_delta: battery 8%, status returning, pos=(7,7), was affected by blackout but synced after clearance.\n\nLessons & recommendations (brief):\n- Recover and recharge all drones immediately; batteries low (<20%).\n- Retrieve physical drones for inspection after aftershock/debris and rising-water events.\n- Consider deploying a relay at grid edge next mission to reduce blackout isolation.\n- Next mission: prioritize unscanned cells to push coverage >90% and monitor flood-prone zone near (10,7).\n\nEnd of transmission \u2014 all survivors secured.",
+      "is_critical": false,
+      "type": "reasoning"
     }
   ],
-  "disaster_events": []
+  "disaster_events": [
+    {
+      "type": "aftershock",
+      "step": 4,
+      "center": [
+        5,
+        4
+      ],
+      "affected_cells": [
+        [
+          4,
+          3
+        ],
+        [
+          4,
+          4
+        ],
+        [
+          5,
+          3
+        ]
+      ]
+    },
+    {
+      "type": "blackout",
+      "step": 6,
+      "center": [
+        8,
+        8
+      ],
+      "radius": 3,
+      "affected_drones": [
+        "drone_delta"
+      ]
+    },
+    {
+      "type": "blackout_cleared",
+      "step": 9,
+      "message": "Communication blackout has lifted. All drones reconnected."
+    },
+    {
+      "type": "rising_water",
+      "step": 11,
+      "source": [
+        10,
+        7
+      ],
+      "flooded_cells": [
+        [
+          9,
+          7
+        ]
+      ]
+    }
+  ]
 }
