@@ -101,8 +101,13 @@ def _summarize_tool_result(tool_name: str, raw_content_blocks: list) -> str | No
                     data = _json.loads(p)
                     if isinstance(data, dict):
                         ok = data.get("success", False)
-                        pos = data.get("position", "?")
                         batt = data.get("battery", "?")
+                        # Multi-step response has "path" and "final_position"
+                        path = data.get("path")
+                        if path and len(path) > 1:
+                            pos = data.get("final_position", path[-1] if path else "?")
+                            return f"Moved {len(path)} steps to {pos}, battery={batt}"
+                        pos = data.get("final_position") or data.get("position", "?")
                         if ok:
                             return f"Moved to {pos}, battery={batt}"
                         return f"Move failed: {data.get('reason', '?')}"
@@ -192,9 +197,31 @@ def _emit_narrative(tool_name: str, raw_content_blocks: list) -> bool:
             return True
 
         if tool_name == "rescue_survivor":
-            if "rescued" in text or "success" in text:
+            import json as _json
+            succeeded = False
+            reason = ""
+            for p in parts:
+                try:
+                    data = _json.loads(p)
+                    if isinstance(data, dict):
+                        if data.get("success") is True:
+                            succeeded = True
+                        elif data.get("reason"):
+                            reason = data["reason"]
+                        elif data.get("error"):
+                            reason = data["error"]
+                        break
+                except (ValueError, TypeError):
+                    pass
+            if succeeded:
                 _log_to_model(
                     "Survivor rescued successfully.",
+                    msg_type="triage",
+                    is_critical=True,
+                )
+            else:
+                _log_to_model(
+                    f"Rescue failed — {reason or 'unknown error'}.",
                     msg_type="triage",
                     is_critical=True,
                 )
@@ -229,14 +256,26 @@ def _emit_narrative(tool_name: str, raw_content_blocks: list) -> bool:
             if drone_count < 1:
                 # Fallback: count unique "drone_id" occurrences in text
                 drone_count = max(len(re.findall(r'"drone_id"', full)), 1)
-            _log_to_model(
-                f"Fleet online — {drone_count} drones reporting for duty.",
-                msg_type="narrative",
-                is_critical=True,
-            )
+            model = get_model()
+            if "discover_drones" not in model.narrated_first_calls:
+                model.narrated_first_calls.add("discover_drones")
+                _log_to_model(
+                    f"Fleet online — {drone_count} drones reporting for duty.",
+                    msg_type="narrative",
+                    is_critical=True,
+                )
+            else:
+                _log_to_model(
+                    f"Fleet status refreshed — {drone_count} drones active.",
+                    msg_type="narrative",
+                    is_critical=False,
+                )
             return True
 
         if tool_name == "move_to":
+            # Disconnection errors — don't narrate (too noisy during blackout)
+            if "disconnected" in text or "blackout" in text:
+                return True
             if "false" in text or "fail" in text or "blocked" in text or "cannot" in text:
                 # Extract reason if available
                 reason = full[:150].strip()
@@ -250,11 +289,20 @@ def _emit_narrative(tool_name: str, raw_content_blocks: list) -> bool:
             return True
 
         if tool_name == "coordinate_swarm":
-            _log_to_model(
-                "Swarm sectors assigned — drones dispersing for coverage.",
-                msg_type="narrative",
-                is_critical=True,
-            )
+            model = get_model()
+            if "coordinate_swarm" not in model.narrated_first_calls:
+                model.narrated_first_calls.add("coordinate_swarm")
+                _log_to_model(
+                    "Swarm sectors assigned — drones dispersing for coverage.",
+                    msg_type="narrative",
+                    is_critical=True,
+                )
+            else:
+                _log_to_model(
+                    "Sectors reassigned — adjusting coverage.",
+                    msg_type="narrative",
+                    is_critical=False,
+                )
             return True
 
         if tool_name == "deploy_as_relay":
@@ -284,13 +332,16 @@ def _emit_narrative(tool_name: str, raw_content_blocks: list) -> bool:
 
         if tool_name == "sync_findings":
             import re as _re
-            count_match = _re.search(r"(\d+)", full)
-            count = count_match.group(1) if count_match else "?"
-            _log_to_model(
-                f"Buffered findings synced — {count} reports recovered.",
-                msg_type="narrative",
-                is_critical=True,
-            )
+            count_match = _re.search(r'"count":\s*(\d+)', full)
+            count = int(count_match.group(1)) if count_match else 0
+            if count > 0:
+                drone_match = _re.search(r'"drone_id":\s*"([^"]+)"', full)
+                drone_id = drone_match.group(1) if drone_match else "?"
+                _log_to_model(
+                    f"Buffered findings synced — {drone_id}: {count} reports recovered.",
+                    msg_type="narrative",
+                    is_critical=False,
+                )
             return True
 
         if tool_name == "get_disaster_events":
@@ -400,6 +451,127 @@ def _normalize_tool_result(result) -> str:
     return str(result)
 
 
+def _summarize_for_llm(tool_name: str, raw_content: str) -> str:
+    """Produce a compact version of tool output for the LLM context.
+
+    Reuses _summarize_tool_result() for structured summaries, falling back
+    to truncated raw content (500 char limit) to keep context lean.
+    """
+    raw_blocks = raw_content if isinstance(raw_content, list) else [raw_content]
+    summary = _summarize_tool_result(tool_name, raw_blocks)
+    if summary:
+        return summary
+    # Fallback: truncate raw content
+    text = raw_content if isinstance(raw_content, str) else str(raw_content)
+    if len(text) > 500:
+        return text[:500] + "...[truncated]"
+    return text
+
+
+def _build_situational_context(model) -> str | None:
+    """Build a concise context string about active blackouts and disconnected drones."""
+    if not model.blackout_zones:
+        return None
+
+    zones = ", ".join(
+        f"({z['center'][0]},{z['center'][1]}) r={z['radius']}"
+        for z in model.blackout_zones
+    )
+
+    disconnected = [
+        d.drone_id for d in model.drones.values()
+        if not d.connected and d.status == "active"
+    ]
+
+    buffered_total = sum(
+        len(d.findings_buffer) for d in model.drones.values()
+        if not d.connected
+    )
+
+    parts = [f"ACTIVE BLACKOUT ZONES: {zones}."]
+    if disconnected:
+        parts.append(f"Disconnected drones (DO NOT command): {', '.join(disconnected)}.")
+        parts.append("They are operating autonomously via pheromone navigation.")
+    if buffered_total > 0:
+        parts.append(f"{buffered_total} buffered findings waiting — call sync_findings() when blackout clears.")
+    parts.append("Focus commands on connected drones only.")
+
+    return " ".join(parts)
+
+
+def _build_rescue_urgency_context(model) -> str | None:
+    """Build urgency context listing unrescued survivors sorted by steps-to-death."""
+    state = model.get_state()
+    survivors = state.get("survivors", [])
+    stats = state.get("stats", {})
+    found = stats.get("found", 0)
+    rescued = stats.get("rescued", 0)
+
+    if found <= rescued:
+        return None  # No unrescued survivors
+
+    # Collect found-but-not-rescued survivors
+    unrescued = []
+    for s in survivors:
+        if s.get("found") and not s.get("rescued") and s.get("health", 0) > 0:
+            severity = s.get("severity", "STABLE")
+            health = s.get("health", 100)
+            drain_rate = {"CRITICAL": 0.05, "MODERATE": 0.02, "STABLE": 0.01}.get(severity, 0.01)
+            steps_to_death = int(health / drain_rate) if drain_rate > 0 else 999
+            pos = s.get("position", [0, 0])
+            unrescued.append({
+                "id": s.get("survivor_id", "?"),
+                "pos": pos,
+                "severity": severity,
+                "health": round(health * 100),
+                "steps_to_death": steps_to_death,
+            })
+
+    if not unrescued:
+        return None
+
+    # Sort by urgency (fewest steps to death first)
+    unrescued.sort(key=lambda x: x["steps_to_death"])
+
+    # Find nearest connected drone for each survivor
+    connected_drones = [
+        d for d in model.drones.values()
+        if d.connected and d.status == "active"
+    ]
+
+    lines = ["RESCUE URGENCY — found survivors bleeding out:"]
+    for s in unrescued:
+        nearest = "none"
+        if connected_drones:
+            def dist(d):
+                return abs(d.pos[0] - s["pos"][0]) + abs(d.pos[1] - s["pos"][1])
+            best = min(connected_drones, key=dist)
+            nearest = f"{best.drone_id} at ({best.pos[0]},{best.pos[1]}), {dist(best)} steps away"
+        lines.append(
+            f"  - {s['id']} at ({s['pos'][0]},{s['pos'][1]}): {s['severity']}, "
+            f"health={s['health']}%, ~{s['steps_to_death']} steps to death, "
+            f"nearest drone: {nearest}"
+        )
+    lines.append("ACTION REQUIRED: move_to → rescue_survivor for each. Do NOT call info tools.")
+    return "\n".join(lines)
+
+
+def _get_unscanned_clusters(model) -> dict:
+    """Return building clusters not yet sufficiently scanned."""
+    clusters = {
+        "SW": [(2, 2), (2, 3), (3, 2), (3, 3)],
+        "SE": [(9, 2), (10, 2), (10, 3)],
+        "NW": [(2, 9), (2, 10), (3, 9), (3, 10)],
+        "NE": [(8, 8), (8, 9), (9, 8), (9, 9)],
+    }
+    unscanned = {}
+    for name, cells in clusters.items():
+        scanned_count = sum(1 for c in cells if c in model.scanned_cells)
+        if scanned_count < len(cells) // 2 + 1:
+            unscanned[name] = cells
+    return unscanned
+
+
 def _log_to_model(message: str, msg_type: str = "system", is_critical: bool = False):
     """Append a log entry to the shared model so the SSE bridge can stream it."""
     model = get_model()
@@ -439,17 +611,22 @@ def _check_new_disasters(prev_count: int) -> list:
         elif etype == "blackout":
             center = event.get("center", "?")
             radius = event.get("radius", "?")
+            affected = event.get("affected_drones", [])
+            drone_list = ", ".join(affected) if affected else "unknown"
             _log_to_model(
-                f"⚠ BLACKOUT at ({center[0]},{center[1]}) radius {radius} — affected drones switching to autonomous mode.",
+                f"⚠ BLACKOUT at ({center[0]},{center[1]}) radius {radius} — "
+                f"disconnected drones: {drone_list}. They are now autonomous. "
+                f"Do NOT try to command them until blackout clears.",
                 msg_type="narrative",
                 is_critical=True,
             )
         elif etype == "blackout_cleared":
-            _log_to_model(
-                "✓ Blackout cleared — call sync_findings() to recover buffered data.",
-                msg_type="narrative",
-                is_critical=True,
-            )
+            buffered = sum(len(d.findings_buffer) for d in get_model().drones.values())
+            if buffered > 0:
+                msg = f"✓ Blackout cleared — all drones reconnected. {buffered} buffered findings available — call sync_findings() NOW."
+            else:
+                msg = "✓ Blackout cleared — all drones reconnected. No buffered findings."
+            _log_to_model(msg, msg_type="narrative", is_critical=True)
     return new_events
 
 
@@ -500,7 +677,7 @@ def build_graph(tools: list):
     tools_by_name = {tool.name: tool for tool in tools}
 
     # Message window size (0 = disabled)
-    msg_window = int(os.environ.get("MSG_WINDOW_SIZE", "0"))
+    msg_window = int(os.environ.get("MSG_WINDOW_SIZE", "40"))
 
     # Step limit from env
     max_steps = int(os.environ.get("MAX_MISSION_STEPS", "50"))
@@ -550,6 +727,27 @@ def build_graph(tools: list):
             stale = set(nudge_indices[:-1])
             messages = [m for i, m in enumerate(messages) if i not in stale]
 
+        # Remove stale injected SystemMessages (disaster alerts, warnings, checkpoints)
+        # These are re-injected fresh each call, so old copies are pure context waste
+        _stale_prefixes = (
+            "⚠ DISASTER ALERT:",
+            "⚠ DISASTER WARNING:",
+            "PERFORMANCE CHECKPOINT",
+            "CRITICAL WARNING:",
+            "WARNING: Info-loop",
+            "WARNING: You have been",
+            "RESCUE URGENCY",
+            "ACTIVE BLACKOUT ZONES:",
+        )
+        messages = [
+            m for i, m in enumerate(messages)
+            if not (
+                isinstance(m, SystemMessage)
+                and i > 0
+                and any(m.content.startswith(prefix) for prefix in _stale_prefixes)
+            )
+        ]
+
         # Enforce step limit using actual simulation step counter
         model = get_model()
         if model.mission_step >= max_steps:
@@ -561,11 +759,38 @@ def build_graph(tools: list):
                 )
             ))
 
+        # Inject blackout situational awareness (zero tool-call cost)
+        ctx = _build_situational_context(model)
+        if ctx:
+            messages.append(SystemMessage(content=ctx))
+
+        # Inject rescue urgency when found > rescued
+        urgency = _build_rescue_urgency_context(model)
+        if urgency:
+            messages.append(SystemMessage(content=urgency))
+
         response = llm_with_tools.invoke(messages)
 
-        # Log LLM reasoning text
-        if response.content and isinstance(response.content, str) and response.content.strip():
-            _log_to_model(response.content, msg_type="reasoning")
+        # Log LLM reasoning text (handle str, list of content blocks, or None)
+        reasoning_text = ""
+        if isinstance(response.content, str):
+            reasoning_text = response.content.strip()
+        elif isinstance(response.content, list):
+            # Extract text from content blocks like {"type": "text", "text": "..."}
+            text_parts = []
+            for block in response.content:
+                if isinstance(block, dict) and block.get("type") == "text" and block.get("text"):
+                    text_parts.append(block["text"])
+                elif isinstance(block, str):
+                    text_parts.append(block)
+            reasoning_text = " ".join(text_parts).strip()
+
+        if reasoning_text:
+            _log_to_model(reasoning_text, msg_type="reasoning")
+        elif response.tool_calls:
+            # No reasoning text but tool calls exist — synthesize a brief entry
+            tool_names = ", ".join(tc["name"] for tc in response.tool_calls)
+            _log_to_model(f"Executing: {tool_names}", msg_type="reasoning")
 
         # Log tool calls
         if response.tool_calls:
@@ -582,64 +807,110 @@ def build_graph(tools: list):
         return {"messages": [response]}
 
     async def tools_with_logging(state: MessagesState):
-        """Execute tool calls sequentially with pacing so SSE can broadcast
-        intermediate drone positions (prevents the 'teleport' effect)."""
+        """Execute tool calls with parallel execution for different drones.
+
+        Tool calls targeting different drone_ids run concurrently via
+        asyncio.gather(). Calls within the same drone group stay sequential
+        (order matters). Global tools (no drone_id) run after all drone
+        groups complete. SSE pacing for move_to is preserved per-group."""
         last_ai_msg = state["messages"][-1]
         if not hasattr(last_ai_msg, "tool_calls") or not last_ai_msg.tool_calls:
             return {"messages": []}
 
-        results = []
-        for tc in last_ai_msg.tool_calls:
+        # --- Helper: execute a single tool call ---
+        async def _execute_one(tc):
             tool = tools_by_name.get(tc["name"])
-
-            # Track disaster and warning counts before advance_simulation
-            pre_advance_disaster_count = None
-            pre_advance_warning_count = None
+            pre_disaster = None
+            pre_warning = None
             if tc["name"] == "advance_simulation":
-                pre_advance_disaster_count = len(get_model().disaster_events)
-                pre_advance_warning_count = len(get_model().warning_events)
+                pre_disaster = len(get_model().disaster_events)
+                pre_warning = len(get_model().warning_events)
 
             if tool is None:
+                raw_content = f"Error: tool '{tc['name']}' not found"
                 msg = ToolMessage(
-                    content=f"Error: tool '{tc['name']}' not found",
+                    content=raw_content,
                     tool_call_id=tc["id"],
                     name=tc["name"],
                 )
             else:
                 try:
                     result = await tool.ainvoke(tc["args"])
+                    raw_content = _normalize_tool_result(result)
+                    llm_content = _summarize_for_llm(tc["name"], raw_content)
                     msg = ToolMessage(
-                        content=_normalize_tool_result(result),
+                        content=llm_content,
                         tool_call_id=tc["id"],
                         name=tc["name"],
                     )
                 except Exception as e:
+                    raw_content = f"Error: {e}"
                     msg = ToolMessage(
-                        content=f"Error: {e}",
+                        content=raw_content,
                         tool_call_id=tc["id"],
                         name=tc["name"],
                     )
+            return msg, raw_content, pre_disaster, pre_warning
 
+        # --- Helper: execute a group of tool calls sequentially ---
+        async def _execute_group(calls):
+            group_results = []
+            for idx, tc in calls:
+                msg, raw_content, pre_d, pre_w = await _execute_one(tc)
+                # Pace single-step move_to so SSE can broadcast positions
+                if tc["name"] == "move_to":
+                    is_multistep = False
+                    try:
+                        import json as _json
+                        parsed = _json.loads(raw_content) if isinstance(raw_content, str) else raw_content
+                        if isinstance(parsed, dict) and len(parsed.get("path", [])) > 1:
+                            is_multistep = True
+                    except (ValueError, TypeError):
+                        pass
+                    if not is_multistep:
+                        await asyncio.sleep(0.20)
+                group_results.append((idx, tc, msg, raw_content, pre_d, pre_w))
+            return group_results
+
+        # --- Group tool calls by drone_id for parallel execution ---
+        groups = {}  # drone_id -> [(original_index, tc)]
+        for idx, tc in enumerate(last_ai_msg.tool_calls):
+            drone_id = tc.get("args", {}).get("drone_id")
+            group_key = drone_id if drone_id else "_global"
+            groups.setdefault(group_key, []).append((idx, tc))
+
+        global_calls = groups.pop("_global", [])
+        drone_groups = list(groups.values())
+
+        # Execute drone groups in parallel, then global calls sequentially
+        all_results = []
+        if drone_groups:
+            gathered = await asyncio.gather(
+                *[_execute_group(g) for g in drone_groups]
+            )
+            for group_result in gathered:
+                all_results.extend(group_result)
+
+        if global_calls:
+            global_result = await _execute_group(global_calls)
+            all_results.extend(global_result)
+
+        # Sort by original index to preserve order for LLM context
+        all_results.sort(key=lambda x: x[0])
+
+        # --- Post-process results: logging, narrative, disaster detection ---
+        results = []
+        for idx, tc, msg, raw_content, pre_disaster, pre_warning in all_results:
             results.append(msg)
 
-            # Log tool result with smart summarization
-            raw = msg.content
-            raw_blocks = raw if isinstance(raw, list) else [raw]
+            raw_blocks = raw_content if isinstance(raw_content, list) else [raw_content]
 
             summary = _summarize_tool_result(msg.name, raw_blocks)
             if summary:
                 content = summary
             else:
-                if isinstance(raw, list):
-                    parts = []
-                    for block in raw:
-                        if isinstance(block, dict) and "text" in block:
-                            parts.append(block["text"])
-                    content = "\n".join(parts) if parts else str(raw)
-                else:
-                    content = str(raw)
-                if len(content) > 300:
-                    content = content[:300] + "..."
+                text = raw_content if isinstance(raw_content, str) else str(raw_content)
+                content = text[:300] + "..." if len(text) > 300 else text
 
             narrated = _emit_narrative(msg.name, raw_blocks)
             if not narrated:
@@ -648,9 +919,8 @@ def build_graph(tools: list):
                     msg_type="result",
                 )
 
-            # Check for new disasters after explicit advance_simulation
-            if pre_advance_disaster_count is not None:
-                new_disasters = _check_new_disasters(pre_advance_disaster_count)
+            if pre_disaster is not None:
+                new_disasters = _check_new_disasters(pre_disaster)
                 if new_disasters:
                     disaster_desc = "; ".join(
                         f"{e['type']} at step {e.get('step', '?')}" for e in new_disasters
@@ -660,9 +930,8 @@ def build_graph(tools: list):
                         "Check affected areas, reroute drones if needed, and report status."
                     )))
 
-            # Check for new warnings after advance_simulation
-            if pre_advance_warning_count is not None:
-                new_warnings = get_model().warning_events[pre_advance_warning_count:]
+            if pre_warning is not None:
+                new_warnings = get_model().warning_events[pre_warning:]
                 if new_warnings:
                     desc = "; ".join(w["message"] for w in new_warnings if not w.get("resolved"))
                     if desc:
@@ -674,10 +943,6 @@ def build_graph(tools: list):
                         results.append(SystemMessage(content=(
                             f"⚠ DISASTER WARNING: {desc}. You have ~1 step to react!"
                         )))
-
-            # Pace move_to calls so SSE can broadcast intermediate positions
-            if tc["name"] == "move_to":
-                await asyncio.sleep(0.25)
 
         # Auto-advance simulation if batch had actions but no explicit advance
         tool_names_in_batch = {tc["name"] for tc in last_ai_msg.tool_calls}
@@ -713,7 +978,7 @@ def build_graph(tools: list):
                     )))
 
         # Mid-mission reflection checkpoints
-        REFLECTION_INTERVAL = 5
+        REFLECTION_INTERVAL = 8 if max_steps <= 20 else 5
         model = get_model()
         if model.mission_step > 0 and model.mission_step % REFLECTION_INTERVAL == 0:
             score = model.compute_score()
@@ -732,23 +997,139 @@ def build_graph(tools: list):
                 f"Are you prioritizing the right survivors? Is drone coverage efficient?"
             )))
 
+        # If agent is stuck in info-only loop, inject a warning to take action
+        if info_loop.get("warn"):
+            model = get_model()
+            urgency = _build_rescue_urgency_context(model)
+            if urgency:
+                results.append(SystemMessage(content=(
+                    "CRITICAL WARNING: You are stuck in an info-gathering loop while survivors are DYING.\n"
+                    f"{urgency}\n"
+                    "Your ONLY acceptable next calls are move_to() and rescue_survivor(). "
+                    "Do NOT call get_mission_summary, get_priority_map, assess_survivor, or any other info tool."
+                )))
+            else:
+                # All found survivors rescued but some unfound — give scan directives
+                unscanned = _get_unscanned_clusters(model)
+                if unscanned:
+                    # Build specific drone→cluster assignments
+                    connected = [
+                        d for d in model.drones.values()
+                        if d.connected and d.status == "active"
+                    ]
+                    cluster_names = list(unscanned.keys())
+                    orders = []
+                    for i, drone in enumerate(connected):
+                        if i < len(cluster_names):
+                            cname = cluster_names[i]
+                            target = unscanned[cname][0]
+                            orders.append(
+                                f"- Send {drone.drone_id} to {cname} cluster at ({target[0]},{target[1]}), "
+                                f"call thermal_scan"
+                            )
+                    cluster_list = ", ".join(cluster_names)
+                    orders_str = "\n".join(orders) if orders else "- Move available drones to unscanned clusters and scan"
+                    results.append(SystemMessage(content=(
+                        f"WARNING: Info-loop detected. {model.get_state()['stats']['total_survivors'] - model.get_state()['stats']['found']} survivors still UNFOUND.\n"
+                        f"UNSCANNED CLUSTERS: {cluster_list}\n"
+                        f"ORDERS:\n{orders_str}\n"
+                        "Execute move_to() and thermal_scan() NOW. Do NOT call info tools."
+                    )))
+                else:
+                    results.append(SystemMessage(content=(
+                        "WARNING: You have been calling info-only tools repeatedly without taking action. "
+                        "STOP querying and START acting. Move drones, scan areas, or rescue survivors NOW. "
+                        "Use move_to(), thermal_scan(), or rescue_survivor() — not get_mission_summary()."
+                    )))
+
         return {"messages": results}
 
     # Track nudge count to prevent infinite loops
     # n = consecutive nudges, total = total nudges this step, step = last seen step
     nudge_count = {"n": 0, "total": 0, "step": 0}
-    MAX_NUDGES = 3
-    MAX_TOTAL_NUDGES = 6
+    MAX_NUDGES = 5
+    MAX_TOTAL_NUDGES = 10
+
+    # Info-only tools don't advance mission state — detect stuck loops
+    INFO_ONLY_TOOLS = {
+        "get_mission_summary", "get_priority_map", "get_pheromone_map",
+        "get_battery_status", "get_disaster_events", "get_network_resilience",
+        "get_performance_score", "discover_drones", "simulate_mission",
+        "assess_survivor", "coordinate_swarm",
+    }
+    info_loop = {"n": 0, "warn": False, "total_resets": 0}
+    MAX_INFO_LOOPS = 3
+    MAX_INFO_RESETS = 2
+    INFO_WARN_THRESHOLD = 2
 
     def should_continue(state: MessagesState):
         """Custom routing: detects premature stops and nudges the agent back."""
         last_msg = state["messages"][-1]
 
-        # If LLM made tool calls, proceed normally (execute tools)
+        # ALWAYS enforce step limit, regardless of tool call type
+        model = get_model()
+        if model.mission_step >= max_steps:
+            _log_to_model(
+                f"Step limit ({max_steps}) reached — ending mission.",
+                msg_type="system", is_critical=True,
+            )
+            return END
+
+        # If LLM made tool calls, check if they are productive or info-only
         if hasattr(last_msg, "tool_calls") and last_msg.tool_calls:
-            nudge_count["n"] = 0  # Reset on successful tool use
-            nudge_count["total"] = 0
-            return "tools"
+            tool_names = {tc["name"] for tc in last_msg.tool_calls}
+            has_productive = bool(tool_names - INFO_ONLY_TOOLS)
+
+            if has_productive:
+                nudge_count["n"] = 0  # Reset on productive tool use
+                nudge_count["total"] = 0
+                info_loop["n"] = 0
+                info_loop["warn"] = False
+                return "tools"
+            else:
+                # Info-only tools — check for stuck loop
+                info_loop["n"] += 1
+                if info_loop["n"] >= INFO_WARN_THRESHOLD:
+                    info_loop["warn"] = True
+                if info_loop["n"] >= MAX_INFO_LOOPS:
+                    # Before ending, check if there are unrescued survivors with active drones
+                    model = get_model()
+                    state_data = model.get_state()
+                    stats = state_data.get("stats", {})
+                    found = stats.get("found", 0)
+                    rescued = stats.get("rescued", 0)
+                    unfound = stats.get("total_survivors", 0) - found
+                    active = stats.get("active_drones", 0)
+                    if active > 0 and (found > rescued or unfound > 0):
+                        # Survivors still need help — reset but cap total resets
+                        info_loop["total_resets"] += 1
+                        if info_loop["total_resets"] <= MAX_INFO_RESETS:
+                            _log_to_model(
+                                f"Info-loop detected ({info_loop['n']} rounds) but "
+                                f"{found - rescued} found-not-rescued, {unfound} unfound — "
+                                f"reset {info_loop['total_resets']}/{MAX_INFO_RESETS}.",
+                                msg_type="system",
+                                is_critical=True,
+                            )
+                            info_loop["n"] = 0
+                            info_loop["warn"] = True  # Keep warning active
+                            return "tools"
+                        else:
+                            _log_to_model(
+                                f"Info-loop persists after {MAX_INFO_RESETS} resets — ending mission.",
+                                msg_type="system",
+                                is_critical=True,
+                            )
+                            return END
+                    _log_to_model(
+                        f"Agent stuck in info-query loop ({info_loop['n']} consecutive "
+                        f"info-only rounds) — ending mission.",
+                        msg_type="system",
+                        is_critical=True,
+                    )
+                    return END
+                # Still allow info calls but don't reset nudge counter
+                return "tools"
 
         # LLM stopped calling tools — check if mission is actually complete
         model = get_model()
@@ -798,6 +1179,17 @@ def build_graph(tools: list):
 
         # Guard against infinite nudge loops
         if nudge_count["n"] >= MAX_NUDGES:
+            # Before ending, check if survivors still need help
+            if (stats.get("found", 0) > stats.get("rescued", 0) or
+                    stats.get("total_survivors", 0) - stats.get("found", 0) > 0) and \
+                    stats.get("active_drones", 0) > 0:
+                _log_to_model(
+                    f"Max nudges reached but survivors remain — resetting nudge counter.",
+                    msg_type="system",
+                    is_critical=True,
+                )
+                nudge_count["n"] = 0
+                return "nudge"
             _log_to_model(
                 "Agent stuck after max nudges — ending mission.",
                 msg_type="system",
@@ -817,17 +1209,47 @@ def build_graph(tools: list):
     def nudge_node(state: MessagesState):
         """Inject a system message forcing the agent to keep acting."""
         model = get_model()
+        connected_drones = [d for d in model.drones.values() if d.connected and d.status == "active"]
+        connected_ids = [d.drone_id for d in connected_drones]
+        blackout_hint = ""
+        if model.blackout_zones:
+            blackout_hint = f" Blackout active — command only: {', '.join(connected_ids)}."
+
+        # Build survivor-specific nudge when unrescued survivors exist
+        urgency = _build_rescue_urgency_context(model)
+        survivor_hint = ""
+        if urgency:
+            survivor_hint = f"\n{urgency}"
+
+        # Build cluster scan directives when survivors are still unfound
+        cluster_hint = ""
+        unscanned = _get_unscanned_clusters(model)
+        if unscanned and not urgency:
+            cluster_names = list(unscanned.keys())
+            orders = []
+            for i, drone in enumerate(connected_drones):
+                if i < len(cluster_names):
+                    cname = cluster_names[i]
+                    target = unscanned[cname][0]
+                    orders.append(
+                        f"- {drone.drone_id} → {cname} cluster ({target[0]},{target[1]}), thermal_scan"
+                    )
+            if orders:
+                cluster_hint = "\nUNSCANNED CLUSTERS: " + ", ".join(cluster_names) + "\n" + "\n".join(orders)
+
         if demo_mode and model.mission_step < MIN_DEMO_STEPS:
             return {"messages": [SystemMessage(content=(
                 f"CONTINUE OPERATING. Step {model.mission_step}/{MIN_DEMO_STEPS}. "
-                "Call advance_simulation() to progress time. Check get_disaster_events() "
-                "for new threats. Monitor drone batteries. Manage any blackouts or emergencies. "
-                "Keep scanning unexplored areas. You MUST call tools."
+                "Move drones toward building clusters, thermal_scan, rescue survivors. "
+                "Batch all move_to + scan + rescue in one response. You MUST call tools."
+                + blackout_hint + survivor_hint + cluster_hint
             ))]}
         return {"messages": [SystemMessage(content=(
             "DO NOT STOP. The mission is NOT complete — there are still survivors "
             "to find and rescue. You are FULLY AUTONOMOUS with no human operator. "
-            "Make the best decision and execute it NOW. You MUST call tools."
+            "Make the best decision and execute it NOW. You MUST call tools. "
+            "Do NOT re-call discover_drones() or coordinate_swarm() — focus on moving, scanning, and rescuing."
+            + blackout_hint + survivor_hint + cluster_hint
         ))]}
 
     # Build the graph

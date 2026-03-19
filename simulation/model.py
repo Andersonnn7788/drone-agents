@@ -38,6 +38,7 @@ class DisasterModel(mesa.Model):
         self.scanned_cells = set()
         self.disaster_events = []
         self.agent_logs = []
+        self.narrated_first_calls = set()  # Track first-time narrative emissions
         self.blackout_zones = []
         self.warning_events = []       # List of warning dicts
         self.pending_disasters = []    # Scheduled disasters to fire next step
@@ -81,8 +82,9 @@ class DisasterModel(mesa.Model):
             if self.terrain[y][x] not in ("WATER",) and (x, y) != BASE_POS
         ]
         positions = self._rng.sample(passable, min(num_survivors, len(passable)))
-        for pos, severity in zip(positions, severities):
+        for i, (pos, severity) in enumerate(zip(positions, severities)):
             survivor = SurvivorAgent(self, severity)
+            survivor.survivor_number = i + 1
             self.survivors.append(survivor)
             self.grid.place_agent(survivor, pos)
 
@@ -103,8 +105,9 @@ class DisasterModel(mesa.Model):
             ((9, 9), "MODERATE"),     # NE buildings — inside blackout zone (center 8,8 r=3)
             ((8, 9), "STABLE"),       # NE buildings — inside blackout zone (Manhattan from (8,8)=1)
         ]
-        for (x, y), severity in demo_placements[:num_survivors]:
+        for i, ((x, y), severity) in enumerate(demo_placements[:num_survivors]):
             survivor = SurvivorAgent(self, severity)
+            survivor.survivor_number = i + 1
             self.survivors.append(survivor)
             self.grid.place_agent(survivor, (x, y))
 
@@ -514,8 +517,8 @@ class DisasterModel(mesa.Model):
         for s in self.survivors:
             if s.found or s.rescued:
                 known_survivors.append({
-                    "survivor_id": s.unique_id,
-                    "position": list(s.pos) if s.pos else None,
+                    "survivor_id": s.survivor_number,
+                    "position": list(s.pos) if s.pos else getattr(s, 'rescue_position', None),
                     "severity": s.severity,
                     "health": round(s.health, 2),
                     "found": s.found,

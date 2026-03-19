@@ -307,7 +307,7 @@ flowchart LR
 | Agent Brain | LangChain + LangGraph + `langchain-mcp-adapters` | — |
 | LLM | OpenAI GPT-5 mini (`gpt-5-mini`) via `langchain-openai` | — |
 | API Bridge | FastAPI (SSE streaming + REST) | `localhost:8001` |
-| Frontend | Next.js 14+ (App Router) + React + TypeScript + Tailwind | `localhost:3000` |
+| Frontend | Next.js 16+ (App Router) + React + TypeScript + Tailwind | `localhost:3000` |
 
 ---
 

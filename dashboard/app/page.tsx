@@ -397,7 +397,7 @@ export default function Page() {
       />
 
       {/* Rescue toast stack — fixed top-right, stacks vertically */}
-      <div className="fixed top-4 right-4 z-40 flex flex-col gap-2 pointer-events-none">
+      <div className="fixed top-14 left-2 z-40 flex flex-col gap-2 pointer-events-none">
         {toasts.map((toast) => (
           <RescueToastItem key={toast.id} toast={toast} />
         ))}
@@ -411,8 +411,8 @@ export default function Page() {
         };
         const currentLessons = lessons.filter((l) => l.mission_num === missionNum);
         return (
-          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center overflow-y-auto py-8">
-            <div className="bg-white rounded-xl shadow-2xl p-8 max-w-lg w-full mx-4">
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl shadow-2xl p-8 max-w-lg w-full max-h-[90vh] overflow-y-auto">
               <div className="text-center mb-6">
                 {score ? (
                   <div className={`inline-flex items-center justify-center w-20 h-20 rounded-full mb-3 bg-gray-900`}>

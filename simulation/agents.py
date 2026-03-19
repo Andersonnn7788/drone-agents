@@ -17,6 +17,7 @@ class SurvivorAgent(mesa.Agent):
         self.found = False
         self.rescued = False
         self.alive = True
+        self.survivor_number = None  # Set by model after creation (1-based)
 
     def step(self):
         if not self.alive or self.rescued:
@@ -41,6 +42,8 @@ class DroneAgent(mesa.Agent):
         self.scan_radius = 1
         self.assigned_sector = None  # (x, y, w, h) tuple or None
         self.is_relay = False
+        self.recent_positions = []   # Last 6 positions for anti-oscillation
+        self.previous_pos = None     # Immediate prior position (fast backtrack check)
 
     # ── LLM-directed actions (called via MCP) ──────────────────────────
 
@@ -68,12 +71,72 @@ class DroneAgent(mesa.Agent):
         if (x, y) == self.pos:
             return {"success": True, "position": [x, y], "battery": self.battery}
 
+        old_pos = self.pos
         self.model.grid.move_agent(self, (x, y))
         self.battery -= 2
+
+        # Track movement history for anti-oscillation
+        self.previous_pos = old_pos
+        self.recent_positions.append(old_pos)
+        if len(self.recent_positions) > 6:
+            self.recent_positions = self.recent_positions[-6:]
+
+        # Deposit light trail pheromone (avoid overwriting stronger scan pheromone)
+        ox, oy = old_pos
+        self.model.pheromone_scanned[oy][ox] = max(
+            self.model.pheromone_scanned[oy][ox], 0.3
+        )
+
         if self.battery <= 0:
             self.battery = 0
             self.status = "dead"
         return {"success": True, "position": [x, y], "battery": self.battery}
+
+    def plan_path_to(self, x, y):
+        """Compute a greedy diagonal path from current position to (x, y).
+
+        Returns list[tuple[int,int]] of waypoints (excludes current position).
+        Does NOT move the drone or deduct battery — planning only.
+        Stops if battery would be insufficient for the remaining path.
+        """
+        path = []
+        cx, cy = self.pos
+        # Reserve battery: each step costs 2, need enough for entire path
+        budget = self.battery
+
+        for _ in range(self.model.grid.width + self.model.grid.height):
+            if (cx, cy) == (x, y):
+                break
+            if budget < 2:
+                break  # Can't afford another move
+
+            dx = 1 if cx < x else (-1 if cx > x else 0)
+            dy = 1 if cy < y else (-1 if cy > y else 0)
+
+            # Try diagonal first, then cardinal directions toward target
+            candidates = []
+            if dx != 0 and dy != 0:
+                candidates.append((cx + dx, cy + dy))
+            if dx != 0:
+                candidates.append((cx + dx, cy))
+            if dy != 0:
+                candidates.append((cx, cy + dy))
+
+            moved = False
+            for tx, ty in candidates:
+                if (0 <= tx < self.model.grid.width
+                        and 0 <= ty < self.model.grid.height
+                        and self.model.terrain[ty][tx] != "WATER"):
+                    path.append((tx, ty))
+                    cx, cy = tx, ty
+                    budget -= 2
+                    moved = True
+                    break
+
+            if not moved:
+                break  # Stuck — no valid move toward target
+
+        return path
 
     def thermal_scan(self):
         """Scan surrounding cells for survivors. Costs 3 battery."""
@@ -99,7 +162,7 @@ class DroneAgent(mesa.Agent):
                     if isinstance(agent, SurvivorAgent) and agent.alive and not agent.found:
                         agent.found = True
                         found.append({
-                            "survivor_id": agent.unique_id,
+                            "survivor_id": agent.survivor_number,
                             "position": [nx, ny],
                             "severity": agent.severity,
                             "health": round(agent.health, 2),
@@ -152,12 +215,13 @@ class DroneAgent(mesa.Agent):
             }
 
         survivor.rescued = True
-        self.model.record_rescue(self.drone_id, survivor.unique_id, survivor.severity, survivor.health)
+        survivor.rescue_position = list(self.pos)
+        self.model.record_rescue(self.drone_id, survivor.survivor_number, survivor.severity, survivor.health)
         self.model.grid.remove_agent(survivor)
         return {
             "success": True,
             "drone_id": self.drone_id,
-            "survivor_id": survivor.unique_id,
+            "survivor_id": survivor.survivor_number,
             "severity": survivor.severity,
             "health": round(survivor.health, 2),
             "position": list(self.pos),
@@ -209,6 +273,15 @@ class DroneAgent(mesa.Agent):
             self._charge()
             return
 
+        # Auto-rescue any found survivor at current cell
+        if self.status == "active":
+            cellmates = self.model.grid.get_cell_list_contents([self.pos])
+            for agent in cellmates:
+                if (isinstance(agent, SurvivorAgent) and agent.found
+                        and agent.alive and not agent.rescued):
+                    self.rescue_survivor(agent)
+                    break
+
         # Autonomous navigation when disconnected
         if not self.connected and self.status == "active" and self.battery >= 5:
             self._pheromone_navigate()
@@ -254,9 +327,11 @@ class DroneAgent(mesa.Agent):
 
     def _pheromone_navigate(self):
         """Navigate using pheromone gradients when disconnected from LLM."""
+        import random
+
         x, y = self.pos
         best_score = -float("inf")
-        best_pos = None
+        best_candidates = []
 
         for dx in [-1, 0, 1]:
             for dy in [-1, 0, 1]:
@@ -270,7 +345,7 @@ class DroneAgent(mesa.Agent):
 
                 score = (
                     self.model.pheromone_survivor_nearby[ny][nx]
-                    - 0.5 * self.model.pheromone_scanned[ny][nx]
+                    - 1.5 * self.model.pheromone_scanned[ny][nx]
                     - 2.0 * self.model.pheromone_danger[ny][nx]
                 )
 
@@ -280,11 +355,25 @@ class DroneAgent(mesa.Agent):
                     if sx <= nx < sx + sw and sy <= ny < sy + sh:
                         score += 0.3
 
+                # Anti-backtrack: penalize immediate previous position
+                if self.previous_pos and (nx, ny) == self.previous_pos:
+                    score -= 0.8
+
+                # Penalize recently visited positions (stronger for more recent)
+                if (nx, ny) in self.recent_positions:
+                    recency = self.recent_positions.index((nx, ny))
+                    age = len(self.recent_positions) - recency
+                    score -= 0.1 * age
+
+                # Collect candidates for random tie-breaking
                 if score > best_score:
                     best_score = score
-                    best_pos = (nx, ny)
+                    best_candidates = [(nx, ny)]
+                elif score == best_score:
+                    best_candidates.append((nx, ny))
 
-        if best_pos:
+        if best_candidates:
+            best_pos = random.choice(best_candidates)
             self.move_to(*best_pos)
             # Auto-scan if at a new location with battery
             if self.battery >= 3 and best_pos not in self.model.scanned_cells:
@@ -302,4 +391,5 @@ class DroneAgent(mesa.Agent):
             "comm_range": self.comm_range,
             "assigned_sector": list(self.assigned_sector) if self.assigned_sector else None,
             "findings_buffer_size": len(self.findings_buffer),
+            "recent_positions": [list(p) for p in self.recent_positions[-4:]],
         }

@@ -16,15 +16,15 @@ const LOG_COLOR: Record<LogType, string> = {
 };
 
 const LOG_TAG: Record<LogType, string> = {
-  reasoning: '[RSN]',
+  reasoning: '[REASONING]',
   tool_call: '[TOOL]',
-  result: '[RES]',
+  result: '[RESULT]',
   triage: '[TRIAGE]',
-  narrative: '[NARR]',
-  system: '[SYS]',
-  warning: '[WARN]',
-  error: '[ERR]',
-  reflection: '[REFLECT]',
+  narrative: '[NARRATIVE]',
+  system: '[SYSTEM]',
+  warning: '[WARNING]',
+  error: '[ERROR]',
+  reflection: '[REFLECTION]',
 };
 
 function formatTime(ts: number): string {

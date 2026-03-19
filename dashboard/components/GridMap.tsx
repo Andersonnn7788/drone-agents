@@ -207,7 +207,7 @@ export default function GridMap({ state, gridEffect, isReplaying, newlyFoundIds,
     }
   }, [state, isReplaying]);
 
-  // Animation loop — pop one waypoint per drone every 300ms
+  // Animation loop — pop one waypoint per drone every 200ms
   useEffect(() => {
     if (isReplaying) return;
     const interval = setInterval(() => {
@@ -216,6 +216,17 @@ export default function GridMap({ state, gridEffect, isReplaying, newlyFoundIds,
       for (const droneId of Object.keys(queues)) {
         const queue = queues[droneId];
         if (!queue || queue.length === 0) continue;
+        // Drain excess queue: if >3 pending, skip to last 2 (record skipped in trail)
+        if (queue.length > 3) {
+          const skipped = queue.splice(0, queue.length - 2);
+          for (const pos of skipped) {
+            const hist = droneHistories.current[droneId] ?? [];
+            const last = hist[hist.length - 1];
+            if (!last || last[0] !== pos[0] || last[1] !== pos[1]) {
+              droneHistories.current[droneId] = [...hist, pos].slice(-40);
+            }
+          }
+        }
         const next = queue.shift()!;
         displayPositions.current[droneId] = next;
         // Record in trail history
@@ -227,7 +238,7 @@ export default function GridMap({ state, gridEffect, isReplaying, newlyFoundIds,
         advanced = true;
       }
       if (advanced) setRenderTick((t) => t + 1);
-    }, 300);
+    }, 200);
     return () => clearInterval(interval);
   }, [isReplaying]);
 
@@ -526,7 +537,7 @@ export default function GridMap({ state, gridEffect, isReplaying, newlyFoundIds,
                     top,
                     width: MARKER,
                     height: MARKER,
-                    transition: 'left 0.3s ease-in-out, top 0.3s ease-in-out',
+                    transition: 'left 0.2s ease-in-out, top 0.2s ease-in-out',
                     borderRadius: '50%',
                     background: `radial-gradient(circle at 38% 32%, ${droneColor}dd, ${droneColor}88)`,
                     border: d.is_relay

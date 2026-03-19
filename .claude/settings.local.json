@@ -15,7 +15,8 @@
       "Bash(python3:*)",
       "Bash(grep -r \"MAX_MISSION_STEPS\\\\|MISSION_STEPS\\\\|recursion_limit\\\\|sleep\\\\|timeout\" /c/Users/LEGION/Downloads/Developer/drone-agents --include=*.py --include=*.ts --include=*.tsx)",
       "Bash(npx next:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(npm run:*)"
     ]
   }
 }

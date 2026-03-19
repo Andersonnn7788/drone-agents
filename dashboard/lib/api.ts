@@ -27,6 +27,7 @@ export interface DroneState {
   comm_range: number;
   assigned_sector: [number, number, number, number] | null;
   findings_buffer_size: number;
+  recent_positions?: [number, number][];
 }
 
 export interface SurvivorState {

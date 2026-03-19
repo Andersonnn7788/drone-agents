@@ -1,5 +1,6 @@
 """FastMCP server — 19 @mcp.tool() definitions wrapping the drone swarm simulation."""
 
+import asyncio
 import os
 
 from mcp.server.fastmcp import FastMCP
@@ -32,15 +33,51 @@ def discover_drones() -> list[dict]:
 
 
 @mcp.tool()
-def move_to(drone_id: str, x: int, y: int) -> dict:
-    """Move a drone one step toward the target grid position (x, y).
-    Costs 2 battery. Fails if target is WATER, out of bounds, or drone is dead/relay."""
+async def move_to(drone_id: str, x: int, y: int) -> dict:
+    """Move a drone to any grid position (x, y) — pathfinds automatically via diagonal + cardinal moves.
+    Costs 2 battery per cell traversed. Fails if target is WATER, out of bounds, or drone is dead/relay.
+    Returns the full path taken, final position, and battery remaining."""
     drone, err = _get_drone(drone_id)
     if err:
         return err
     if not drone.connected:
         return {"error": f"Drone '{drone_id}' is disconnected (blackout). Cannot command — it is operating autonomously."}
-    return drone.move_to(x, y)
+
+    # Adjacent or same-cell move — use single-step (backward compatible)
+    dx_dist = abs(x - drone.pos[0])
+    dy_dist = abs(y - drone.pos[1])
+    if dx_dist <= 1 and dy_dist <= 1:
+        result = drone.move_to(x, y)
+        result["recent_positions"] = [list(p) for p in drone.recent_positions[-4:]]
+        return result
+
+    # Multi-step: plan path then execute step by step
+    waypoints = drone.plan_path_to(x, y)
+    if not waypoints:
+        return {"success": False, "reason": "no valid path to target", "position": list(drone.pos), "battery": drone.battery}
+
+    path_taken = []
+    reason = None
+    for wx, wy in waypoints:
+        result = drone.move_to(wx, wy)
+        if not result.get("success"):
+            reason = result.get("reason", "move failed")
+            break
+        path_taken.append([wx, wy])
+        # Let SSE broadcast intermediate positions
+        await asyncio.sleep(0.15)
+
+    final_pos = list(drone.pos)
+    reached = final_pos == [x, y]
+    return {
+        "success": reached,
+        "path": path_taken,
+        "final_position": final_pos,
+        "battery": drone.battery,
+        "steps_taken": len(path_taken),
+        "reason": reason,
+        "recent_positions": [list(p) for p in drone.recent_positions[-4:]],
+    }
 
 
 @mcp.tool()
@@ -151,16 +188,20 @@ def get_mission_summary() -> dict:
     # Build narrative-friendly fields
     drone_summaries = []
     for d in state["drones"].values():
+        pos = d.get('position') or [0, 0]
+        recent = d.get('recent_positions', [])
+        path_str = f", recent_path={recent}" if recent else ""
         drone_summaries.append(
             f"{d['drone_id']}: battery={d['battery']}%, status={d['status']}, "
-            f"pos=({d['position'][0]},{d['position'][1]}), connected={d['connected']}"
+            f"pos=({pos[0]},{pos[1]}), connected={d['connected']}{path_str}"
         )
 
     survivor_summaries = []
     for s in state["survivors"]:
+        pos = s.get('position') or [0, 0]
         survivor_summaries.append(
             f"Survivor #{s['survivor_id']}: {s['severity']}, health={s['health']}, "
-            f"pos=({s['position'][0]},{s['position'][1]}), "
+            f"pos=({pos[0]},{pos[1]}), "
             f"{'RESCUED' if s['rescued'] else ('DEAD' if not s['alive'] else 'alive')}"
         )
 
@@ -213,14 +254,12 @@ def rescue_survivor(drone_id: str, survivor_id: int) -> dict:
     # Find the survivor
     target = None
     for s in model.survivors:
-        if s.unique_id == survivor_id:
+        if s.survivor_number == survivor_id:
             target = s
             break
     if target is None:
         return {"error": f"Unknown survivor_id {survivor_id}. Check discovered survivors first."}
 
-    if not drone.connected:
-        return {"error": f"Drone '{drone_id}' is disconnected (blackout). Cannot command — it is operating autonomously."}
     return drone.rescue_survivor(target)
 
 
@@ -260,7 +299,7 @@ def assess_survivor(survivor_id: int) -> dict:
 
     survivor = None
     for s in model.survivors:
-        if s.unique_id == survivor_id:
+        if s.survivor_number == survivor_id:
             survivor = s
             break
 
