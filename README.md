@@ -1,6 +1,6 @@
 # Drone Rescuer
 
-Drone Rescuer is a **self-healing rescue drone swarm simulation** where an autonomous AI Command Agent orchestrates a fleet of drones to find survivors in a disaster zone — with zero cloud connectivity. All communication between the Agent (LLM) and Drones (simulation) flows through **Model Context Protocol (MCP)**.
+Drone Rescuer is a **self-healing rescue drone swarm simulation** where an autonomous AI Command Agent orchestrates a fleet of drones to find survivors in a disaster zone — with zero cloud connectivity. The agent **learns from every mission** (RL-inspired), reflecting mid-run and carrying tactical lessons forward so each deployment is smarter than the last. All communication between the Agent (LLM) and Drones (simulation) flows through **Model Context Protocol (MCP)**.
 
 **Hackathon Track:** Agentic AI (Decentralised Swarm Intelligence)
 
@@ -10,9 +10,11 @@ Drone Rescuer is a **self-healing rescue drone swarm simulation** where an auton
 
 ## What It Does
 
-An LLM Commander orchestrates 4 drones across a 12x12 disaster zone grid to locate and triage 8 survivors with deteriorating health. The simulation is alive: aftershocks reshape terrain, rising water floods cells, and communication blackouts sever the link between the AI and its drones.
+An LLM Commander orchestrates 4 drones across a 12x12 disaster zone grid to locate and triage 5 survivors with deteriorating health. The simulation is alive: aftershocks reshape terrain, rising water floods cells, and communication blackouts sever the link between the AI and its drones.
 
 What makes this system genuinely decentralised: **drones are not puppets**. The LLM sets high-level strategy, but every drone carries local autonomy rules — continuing to scan, avoid danger, and follow pheromone gradients even when communication is severed. Survivors deteriorate at different rates based on severity, forcing real-time triage decisions that showcase the LLM's chain-of-thought reasoning depth.
+
+An RL-inspired feedback loop scores each mission (A–F), triggers mid-mission reflection checkpoints, and extracts tactical lessons that are injected into the next mission's prompt — so past mistakes become future instincts.
 
 The entire system is observable through a real-time Next.js dashboard with grid visualization, drone telemetry, reasoning logs, mesh network topology, mission timeline replay, and voice narration of critical events.
 
@@ -22,7 +24,7 @@ The entire system is observable through a real-time Next.js dashboard with grid 
 
 | Tier | Role | How It Works |
 |------|------|-------------|
-| **Tier 1 — LLM Commander** (Strategic) | Sector assignments, triage reasoning, digital twin planning, pheromone map analysis, swarm coordination | Communicates via MCP tool calls over Streamable HTTP |
+| **Tier 1 — LLM Commander** (Strategic) | Sector assignments, triage reasoning, digital twin planning, pheromone map analysis, swarm coordination, mid-mission reflection, cross-mission adaptive learning | Communicates via MCP tool calls over Streamable HTTP |
 | **Tier 2 — Drone Local Autonomy** (Tactical) | Continue scanning, auto-return at low battery, pheromone gradient navigation, mesh relay, buffer findings | Operates independently during blackouts — MCP tools reject commands to disconnected drones, enforcing true autonomous operation |
 
 During a communication blackout, drones seamlessly switch to autonomous mode: following pheromone gradients (`score = survivor_nearby - 0.5*scanned - 2.0*danger`), auto-returning when battery drops below 15%, and buffering discoveries until connectivity is restored.
@@ -327,7 +329,17 @@ flowchart LR
 
 - **Voice Narration** — Browser SpeechSynthesis reads critical log entries aloud. Toggle on/off from the control panel.
 
-- **RL-Inspired Adaptive Learning** — Closed feedback loop that makes the agent smarter across missions. A scoring engine grades each mission (A–F) across rescue rate, speed, coverage, efficiency, and death penalty. Mid-mission reflection checkpoints every 5 steps let the LLM review its score and adjust strategy in real-time. Post-mission lesson extraction uses the LLM to distill 3–5 tactical lessons, persisted to `logs/lessons_learned.json` (max 15, FIFO). On the next mission, adaptive prompt evolution injects accumulated lessons into the system prompt — so past mistakes become future instincts.
+- **RL-Inspired Adaptive Learning** — Closed feedback loop that makes the agent measurably smarter across missions. Five stages form a continuous learning cycle:
+
+  - **Scoring Engine** — Every mission is graded A–F on a composite score. Base points per rescue scale by severity: CRITICAL = 100, MODERATE = 70, STABLE = 50. On top of that: a health bonus (`health × 50`), a speed bonus (+20 pts if rescued in the first half of the mission), a coverage bonus (up to 200 pts based on % of grid scanned), and an efficiency bonus (remaining battery ÷ 10). Each survivor death costs −30 pts. Grade thresholds: **A** ≥ 500, **B** ≥ 350, **C** ≥ 200, **D** ≥ 100, **F** < 100.
+
+  - **Mid-Mission Reflection** — Every 5 steps, an automatic performance checkpoint injects the current score breakdown and the prompt *"What is working? What should change?"* into the LLM context (flagged `is_critical` so it's read aloud by voice narration). This lets the agent course-correct strategy while drones are still in the field.
+
+  - **Post-Mission Lesson Extraction** — At mission end, the LLM analyzes the full run (final score, rescue events, disaster timeline) and distills 3–5 tactical lessons. Each lesson includes a one-sentence rule, supporting evidence, and a priority tag (high / medium / low). Temperature is set to 0.3 for consistent, focused output.
+
+  - **Persistent Memory** — Lessons are saved to `logs/lessons_learned.json` with metadata (source mission number, score, and grade). A FIFO cap of 15 lessons keeps the context window lean while retaining the most recent experience.
+
+  - **Adaptive Prompt Evolution** — On the next mission, all stored lessons are loaded and injected as a numbered `## Adaptive Intelligence` block in the system prompt — formatted as `[PRIORITY] (Mission #N, Grade X) lesson text`. The LLM explicitly sees its own past failures and successes before making its first move.
 
 ---
 
