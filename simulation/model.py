@@ -1,5 +1,7 @@
 """DisasterModel — Mesa 3 simulation: grid, terrain, heatmap, pheromones, disasters."""
 
+import os
+
 import mesa
 import numpy as np
 import random
@@ -37,6 +39,13 @@ class DisasterModel(mesa.Model):
         self.disaster_events = []
         self.agent_logs = []
         self.blackout_zones = []
+        self.warning_events = []       # List of warning dicts
+        self.pending_disasters = []    # Scheduled disasters to fire next step
+
+        # Scoring engine
+        self.mission_score = 0
+        self.rescue_events = []  # {survivor_id, severity, health_at_rescue, step, points, drone_id}
+        self.deaths_while_active = 0  # survivors who died while drones were active
 
         # Create drones at base
         drone_names = ["drone_alpha", "drone_bravo", "drone_charlie", "drone_delta", "drone_echo"]
@@ -191,7 +200,10 @@ class DisasterModel(mesa.Model):
         for drone in self.drones.values():
             drone.step()
 
-        # 5. Dynamic disasters
+        # 5a. Process pending disasters (fire scheduled ones)
+        self._process_pending_disasters()
+
+        # 5b. Dynamic disasters (schedule new ones + emit warnings)
         if self.demo_mode:
             self._demo_scripted_events()
         else:
@@ -208,45 +220,98 @@ class DisasterModel(mesa.Model):
         # 8. Record state snapshot
         self.state_history.append(self.get_state())
 
+    def _process_pending_disasters(self):
+        """Fire any scheduled disasters whose fire_at_step has arrived."""
+        remaining = []
+        for pending in self.pending_disasters:
+            if pending["fire_at_step"] > self.mission_step:
+                remaining.append(pending)
+                continue
+
+            if pending["type"] == "aftershock":
+                cx, cy = pending["center"]
+                converted = []
+                for dx in range(-1, 2):
+                    for dy in range(-1, 2):
+                        nx, ny = cx + dx, cy + dy
+                        if (0 <= nx < self.width and 0 <= ny < self.height
+                                and self.terrain[ny][nx] == "OPEN" and len(converted) < 3):
+                            self.terrain[ny][nx] = "DEBRIS"
+                            self.pheromone_danger[ny][nx] = 1.0
+                            self.heatmap[ny][nx] = max(0.05, self.heatmap[ny][nx] * 0.3)
+                            converted.append([nx, ny])
+                if converted:
+                    self.disaster_events.append({
+                        "type": "aftershock",
+                        "step": self.mission_step,
+                        "center": [cx, cy],
+                        "affected_cells": converted,
+                    })
+
+            elif pending["type"] == "rising_water":
+                wx, wy = pending["center"]
+                expanded = []
+                for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                    nx, ny = wx + dx, wy + dy
+                    if (0 <= nx < self.width and 0 <= ny < self.height
+                            and self.terrain[ny][nx] in ("OPEN", "ROAD") and len(expanded) < 1):
+                        self.terrain[ny][nx] = "WATER"
+                        self.pheromone_danger[ny][nx] = 1.0
+                        expanded.append([nx, ny])
+                        for agent in self.grid.get_cell_list_contents([(nx, ny)]):
+                            if isinstance(agent, SurvivorAgent) and agent.alive:
+                                agent.alive = False
+                                agent.health = 0
+                if expanded:
+                    self.disaster_events.append({
+                        "type": "rising_water",
+                        "step": self.mission_step,
+                        "source": [wx, wy],
+                        "flooded_cells": expanded,
+                    })
+
+            elif pending["type"] == "blackout":
+                self.trigger_blackout(*pending["center"], pending["radius"])
+
+            # Mark corresponding warning as resolved
+            for w in self.warning_events:
+                if (w.get("pending_id") == id(pending) and not w.get("resolved")):
+                    w["resolved"] = True
+
+        self.pending_disasters = remaining
+
     def _check_aftershock(self):
-        """Random aftershock: ~10% chance per step after step 8."""
+        """Random aftershock: ~10% chance per step after step 8. Schedules for next step."""
         if self.mission_step < 8:
             return
         if self._rng.random() > 0.10:
             return
 
-        # Pick a random area and convert 2-3 OPEN cells to DEBRIS
         cx = self._rng.randint(1, self.width - 2)
         cy = self._rng.randint(1, self.height - 2)
-        converted = []
 
-        for dx in range(-1, 2):
-            for dy in range(-1, 2):
-                nx, ny = cx + dx, cy + dy
-                if (0 <= nx < self.width and 0 <= ny < self.height
-                        and self.terrain[ny][nx] == "OPEN" and len(converted) < 3):
-                    self.terrain[ny][nx] = "DEBRIS"
-                    self.pheromone_danger[ny][nx] = 1.0
-                    self.heatmap[ny][nx] = max(0.05, self.heatmap[ny][nx] * 0.3)
-                    converted.append([nx, ny])
-
-        if converted:
-            event = {
-                "type": "aftershock",
-                "step": self.mission_step,
-                "center": [cx, cy],
-                "affected_cells": converted,
-            }
-            self.disaster_events.append(event)
+        pending = {
+            "type": "aftershock",
+            "fire_at_step": self.mission_step + 1,
+            "center": (cx, cy),
+        }
+        self.pending_disasters.append(pending)
+        self.warning_events.append({
+            "type": "aftershock_warning",
+            "step": self.mission_step,
+            "estimated_center": [cx, cy],
+            "message": "Seismic activity detected — aftershock imminent!",
+            "resolved": False,
+            "pending_id": id(pending),
+        })
 
     def _check_rising_water(self):
-        """Random rising water: ~7% chance per step after step 12."""
+        """Random rising water: ~7% chance per step after step 12. Schedules for next step."""
         if self.mission_step < 12:
             return
         if self._rng.random() > 0.07:
             return
 
-        # Find existing water cells and expand one of them
         water_cells = [
             (x, y) for x in range(self.width) for y in range(self.height)
             if self.terrain[y][x] == "WATER"
@@ -255,66 +320,73 @@ class DisasterModel(mesa.Model):
             return
 
         wx, wy = self._rng.choice(water_cells)
-        expanded = []
-        for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-            nx, ny = wx + dx, wy + dy
-            if (0 <= nx < self.width and 0 <= ny < self.height
-                    and self.terrain[ny][nx] in ("OPEN", "ROAD") and len(expanded) < 1):
-                self.terrain[ny][nx] = "WATER"
-                self.pheromone_danger[ny][nx] = 1.0
-                expanded.append([nx, ny])
 
-                # Kill survivors in flooded cells
-                for agent in self.grid.get_cell_list_contents([(nx, ny)]):
-                    if isinstance(agent, SurvivorAgent) and agent.alive:
-                        agent.alive = False
-                        agent.health = 0
-
-        if expanded:
-            event = {
-                "type": "rising_water",
-                "step": self.mission_step,
-                "source": [wx, wy],
-                "flooded_cells": expanded,
-            }
-            self.disaster_events.append(event)
+        pending = {
+            "type": "rising_water",
+            "fire_at_step": self.mission_step + 1,
+            "center": (wx, wy),
+        }
+        self.pending_disasters.append(pending)
+        self.warning_events.append({
+            "type": "rising_water_warning",
+            "step": self.mission_step,
+            "estimated_center": [wx, wy],
+            "message": "Water levels rising — flooding imminent!",
+            "resolved": False,
+            "pending_id": id(pending),
+        })
 
     # ── Demo scripted events ─────────────────────────────────────────
 
     def _demo_scripted_events(self):
-        """Deterministic demo events at specific steps."""
+        """Deterministic demo events at specific steps.
+        Warnings fire 1 step before; _process_pending_disasters() fires the actual event.
+        """
         step = self.mission_step
 
-        # Step 2: Aftershock near (5, 4)
-        if step == 2:
-            cx, cy = 5, 4
-            converted = []
-            for dx in range(-1, 2):
-                for dy in range(-1, 2):
-                    nx, ny = cx + dx, cy + dy
-                    if (0 <= nx < self.width and 0 <= ny < self.height
-                            and self.terrain[ny][nx] == "OPEN" and len(converted) < 3):
-                        self.terrain[ny][nx] = "DEBRIS"
-                        self.pheromone_danger[ny][nx] = 1.0
-                        self.heatmap[ny][nx] = max(0.05, self.heatmap[ny][nx] * 0.3)
-                        converted.append([nx, ny])
-            if converted:
-                self.disaster_events.append({
-                    "type": "aftershock",
-                    "step": step,
-                    "center": [cx, cy],
-                    "affected_cells": converted,
-                })
+        # Step 1: Emit aftershock warning for (5,4), schedule aftershock for step 2
+        if step == 1:
+            pending = {
+                "type": "aftershock",
+                "fire_at_step": 2,
+                "center": (5, 4),
+            }
+            self.pending_disasters.append(pending)
+            self.warning_events.append({
+                "type": "aftershock_warning",
+                "step": step,
+                "estimated_center": [5, 4],
+                "message": "Seismic activity detected — aftershock imminent near (5,4)!",
+                "resolved": False,
+                "pending_id": id(pending),
+            })
 
-        # Step 4: Blackout at (8, 8) radius 3
-        elif step == 4:
-            self.trigger_blackout(8, 8, 3)
+        # Step 2: _process_pending_disasters() fires the aftershock (handled above)
 
-        # Step 6: Blackout clears
+        # Step 3: Emit blackout warning for (8,8) r=3, schedule blackout for step 4
+        elif step == 3:
+            pending = {
+                "type": "blackout",
+                "fire_at_step": 4,
+                "center": (8, 8),
+                "radius": 3,
+            }
+            self.pending_disasters.append(pending)
+            self.warning_events.append({
+                "type": "blackout_warning",
+                "step": step,
+                "estimated_center": [8, 8],
+                "message": "Communication interference building — blackout imminent at (8,8) r=3!",
+                "resolved": False,
+                "pending_id": id(pending),
+            })
+
+        # Step 4: _process_pending_disasters() fires the blackout
+
+        # Step 6: Blackout clears + emit rising water warning for (10,7)
         elif step == 6:
             if self.blackout_zones:
                 self.blackout_zones.clear()
-                # Restore connectivity for all drones
                 for drone in self.drones.values():
                     drone.connected = True
                 self.disaster_events.append({
@@ -323,29 +395,22 @@ class DisasterModel(mesa.Model):
                     "message": "Communication blackout has lifted. All drones reconnected.",
                 })
 
-        # Step 7: Rising water near (10, 7)
-        elif step == 7:
-            wx, wy = 10, 7
-            expanded = []
-            for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
-                nx, ny = wx + dx, wy + dy
-                if (0 <= nx < self.width and 0 <= ny < self.height
-                        and self.terrain[ny][nx] in ("OPEN", "ROAD") and len(expanded) < 1):
-                    self.terrain[ny][nx] = "WATER"
-                    self.pheromone_danger[ny][nx] = 1.0
-                    expanded.append([nx, ny])
-                    # Kill survivors in flooded cells
-                    for agent in self.grid.get_cell_list_contents([(nx, ny)]):
-                        if isinstance(agent, SurvivorAgent) and agent.alive:
-                            agent.alive = False
-                            agent.health = 0
-            if expanded:
-                self.disaster_events.append({
-                    "type": "rising_water",
-                    "step": step,
-                    "source": [wx, wy],
-                    "flooded_cells": expanded,
-                })
+            pending = {
+                "type": "rising_water",
+                "fire_at_step": 7,
+                "center": (10, 7),
+            }
+            self.pending_disasters.append(pending)
+            self.warning_events.append({
+                "type": "rising_water_warning",
+                "step": step,
+                "estimated_center": [10, 7],
+                "message": "Water levels rising — flooding imminent near (10,7)!",
+                "resolved": False,
+                "pending_id": id(pending),
+            })
+
+        # Step 7: _process_pending_disasters() fires the rising water
 
     # ── Digital twin / mission simulation ─────────────────────────────
 
@@ -482,6 +547,10 @@ class DisasterModel(mesa.Model):
                 k: v for k, v in self.mesh_topology.items()
             },
             "disaster_events": self.disaster_events,
+            "warning_events": [
+                {k: v for k, v in w.items() if k != "pending_id"}
+                for w in self.warning_events
+            ],
             "blackout_zones": [
                 {"center": list(z["center"]), "radius": z["radius"]}
                 for z in self.blackout_zones
@@ -497,6 +566,76 @@ class DisasterModel(mesa.Model):
                 "total_cells": self.width * self.height,
                 "coverage_pct": round(len(self.scanned_cells) / (self.width * self.height) * 100, 1),
             },
+            "score": self.compute_score(),
+        }
+
+    # ── Scoring engine ──────────────────────────────────────────────
+
+    def record_rescue(self, drone_id, survivor_id, severity, health):
+        """Record a rescue event and update the mission score."""
+        base_points = {"CRITICAL": 100, "MODERATE": 70, "STABLE": 50}.get(severity, 50)
+        health_bonus = round(health * 50)
+        max_steps = int(os.environ.get("MAX_MISSION_STEPS", "50"))
+        speed_bonus = 20 if self.mission_step < max_steps / 2 else 0
+        points = base_points + health_bonus + speed_bonus
+
+        event = {
+            "survivor_id": survivor_id,
+            "severity": severity,
+            "health_at_rescue": round(health, 2),
+            "step": self.mission_step,
+            "points": points,
+            "drone_id": drone_id,
+        }
+        self.rescue_events.append(event)
+        self.mission_score += points
+
+    def compute_score(self):
+        """Compute full mission score breakdown."""
+        rescue_points = sum(e["points"] for e in self.rescue_events)
+        speed_bonus = sum(
+            20 for e in self.rescue_events
+            if e["step"] < int(os.environ.get("MAX_MISSION_STEPS", "50")) / 2
+        )
+
+        coverage_pct = len(self.scanned_cells) / (self.width * self.height) * 100
+        coverage_bonus = min(200, round(coverage_pct * 2))
+
+        # Death penalty: survivors who died while active drones exist
+        active_drones = sum(1 for d in self.drones.values() if d.status == "active")
+        deaths = sum(
+            1 for s in self.survivors
+            if not s.alive and not s.rescued and active_drones > 0
+        )
+        death_penalty = deaths * 30
+
+        # Efficiency bonus: remaining battery across active drones
+        remaining_battery = sum(d.battery for d in self.drones.values() if d.status == "active")
+        efficiency_bonus = round(remaining_battery / 10)
+
+        total = rescue_points + coverage_bonus + efficiency_bonus - death_penalty
+
+        if total >= 500:
+            grade = "A"
+        elif total >= 350:
+            grade = "B"
+        elif total >= 200:
+            grade = "C"
+        elif total >= 100:
+            grade = "D"
+        else:
+            grade = "F"
+
+        return {
+            "total": total,
+            "grade": grade,
+            "rescue_points": rescue_points,
+            "speed_bonus": speed_bonus,
+            "coverage_bonus": coverage_bonus,
+            "death_penalty": death_penalty,
+            "efficiency_bonus": efficiency_bonus,
+            "rescues": len(self.rescue_events),
+            "rescue_events": self.rescue_events,
         }
 
     def get_priority_map(self):

@@ -14,7 +14,8 @@ export type LogType =
   | 'narrative'
   | 'system'
   | 'warning'
-  | 'error';
+  | 'error'
+  | 'reflection';
 
 export interface DroneState {
   drone_id: string;
@@ -60,6 +61,14 @@ export interface DisasterEvent {
   affected_drones?: string[];
 }
 
+export interface WarningEvent {
+  type: 'aftershock_warning' | 'rising_water_warning' | 'blackout_warning';
+  step: number;
+  estimated_center: [number, number];
+  message: string;
+  resolved: boolean;
+}
+
 export interface MissionStats {
   total_survivors: number;
   found: number;
@@ -72,11 +81,40 @@ export interface MissionStats {
   coverage_pct: number;
 }
 
+export interface ScoreBreakdown {
+  total: number;
+  grade: string;
+  rescue_points: number;
+  speed_bonus: number;
+  coverage_bonus: number;
+  death_penalty: number;
+  efficiency_bonus: number;
+  rescues: number;
+  rescue_events: Array<{
+    survivor_id: number;
+    severity: Severity;
+    health_at_rescue: number;
+    step: number;
+    points: number;
+    drone_id: string;
+  }>;
+}
+
+export interface LessonLearned {
+  lesson: string;
+  evidence: string;
+  priority: string;
+  mission_num: number;
+  mission_score: number;
+  mission_grade: string;
+}
+
 export interface MissionCompleteData {
   mission_step: number;
   stats: MissionStats;
   disaster_event_count: number;
   status: string;
+  score?: ScoreBreakdown;
 }
 
 export interface SimState {
@@ -90,8 +128,10 @@ export interface SimState {
   scanned_cells: [number, number][];
   mesh_topology: Record<string, string[]>;
   disaster_events: DisasterEvent[];
+  warning_events: WarningEvent[];
   blackout_zones: BlackoutZone[];
   stats: MissionStats;
+  score?: ScoreBreakdown;
 }
 
 export interface LogEntry {
@@ -120,6 +160,7 @@ export interface SSEHandlers {
   onDisaster: (event: DisasterEvent) => void;
   onBlackout: (event: DisasterEvent) => void;
   onMissionComplete: (data: MissionCompleteData) => void;
+  onWarning: (event: WarningEvent) => void;
 }
 
 export function connectSSE(handlers: SSEHandlers): EventSource {
@@ -157,6 +198,14 @@ export function connectSSE(handlers: SSEHandlers): EventSource {
     }
   });
 
+  es.addEventListener('warning', (e) => {
+    try {
+      handlers.onWarning(JSON.parse((e as MessageEvent).data));
+    } catch {
+      // ignore
+    }
+  });
+
   es.addEventListener('mission_complete', (e) => {
     try {
       handlers.onMissionComplete(JSON.parse((e as MessageEvent).data));
@@ -186,10 +235,30 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
   return res.json();
 }
 
+// ── Gamification types ────────────────────────────────────────────────────────
+
+export interface RescueToast {
+  id: string;
+  survivorId: number;
+  severity: Severity;
+  healthAtRescue: number;
+  points: number;
+  dismissing: boolean;
+}
+
+export interface GameScore {
+  total: number;
+  livesSaved: number;
+  streak: number;
+  lastRescueStep: number | null;
+}
+
 export const api = {
   getState: () => get<SimState>('/api/state'),
   getLogs: () => get<LogEntry[]>('/api/logs'),
   getHistory: () => get<HistoryResponse>('/api/history'),
+  getScore: () => get<ScoreBreakdown>('/api/score'),
+  getLessons: () => get<LessonLearned[]>('/api/lessons'),
   startMission: () => post<{ status: string; mission_step: number }>('/api/start'),
   step: (steps = 1) => post<{ steps_advanced: number; mission_step: number }>('/api/step', { steps }),
   triggerBlackout: (zone_x: number, zone_y: number, radius: number) =>

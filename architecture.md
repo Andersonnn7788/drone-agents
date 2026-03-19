@@ -36,7 +36,7 @@ flowchart TB
     end
 
     subgraph MCP["MCP Server :8000/mcp"]
-        TOOLS["18 @mcp.tool() endpoints"]
+        TOOLS["19 @mcp.tool() endpoints"]
     end
 
     subgraph Sim["Mesa Simulation Engine"]
@@ -160,7 +160,7 @@ flowchart TB
 
 ## 4. MCP Tool Categories
 
-18 tools organized by category.
+19 tools organized by category.
 
 ```mermaid
 flowchart LR
@@ -179,13 +179,14 @@ flowchart LR
         rescue["rescue_survivor<br>Rescue a found survivor"]
     end
 
-    subgraph Innovation["Innovation Tools (6)"]
+    subgraph Innovation["Innovation Tools (7)"]
         pheromone["get_pheromone_map<br>Pheromone layer data"]
         disaster["get_disaster_events<br>Active disaster list"]
         assess["assess_survivor<br>Survivor triage info"]
         relay["deploy_as_relay<br>Convert drone to relay"]
         resilience["get_network_resilience<br>Mesh health metrics"]
         coordinate["coordinate_swarm<br>Multi-drone orders"]
+        score["get_performance_score<br>Mission score breakdown"]
     end
 
     AGENT["LangGraph Agent"] -->|"MCP HTTP"| Core
@@ -317,7 +318,7 @@ flowchart LR
     subgraph Bridge["FastAPI Bridge :8001"]
         POLL["State Poller"]
         SSE_GEN["SSE Generator<br>(GET /api/stream)"]
-        REST_EP["REST Endpoints<br>(GET /api/state)<br>(GET /api/logs)<br>(GET /api/history)<br>(GET /api/mesh)<br>(GET /api/health)<br>(POST /api/reset)"]
+        REST_EP["REST Endpoints<br>(GET /api/state)<br>(GET /api/logs)<br>(GET /api/history)<br>(GET /api/mesh)<br>(GET /api/health)<br>(POST /api/reset)<br>(GET /api/score)<br>(GET /api/lessons)"]
     end
 
     subgraph Dashboard["Next.js Dashboard :3000"]
@@ -360,7 +361,26 @@ flowchart LR
 
 ---
 
-## 9. Pheromone System
+## 9. Adaptive Learning Loop
+
+The agent improves across missions through a closed feedback loop: score, reflect, learn, adapt.
+
+```mermaid
+flowchart LR
+    EXEC["Mission Execution<br>(LangGraph agent loop)"] --> SCORE["compute_score()<br>Grade A–F<br>(rescue, speed, coverage,<br>death penalty, efficiency)"]
+    SCORE --> REFLECT["Mid-Mission Reflection<br>(every 5 steps)<br>SystemMessage with score<br>breakdown injected"]
+    REFLECT --> EXEC
+    SCORE --> LESSONS["Post-Mission Lesson<br>Extraction<br>(LLM, temperature=0.3)<br>3–5 tactical lessons"]
+    LESSONS --> PERSIST["Persist to<br>lessons_learned.json<br>(max 15 lessons,<br>oldest evicted)"]
+    PERSIST --> PROMPT["build_adaptive_prompt()<br>Appends lessons to<br>system prompt as<br>'Adaptive Intelligence<br>— Mission #N'"]
+    PROMPT --> EXEC
+```
+
+The scoring engine evaluates rescue points, speed bonus, coverage bonus, death penalty, and efficiency bonus to produce a total score and letter grade (A >= 500, B >= 350, C >= 200, D >= 100, F < 100). Mid-mission reflection checkpoints (every 5 steps) inject the current score breakdown as a `SystemMessage`, prompting the agent to evaluate what is working and what should change. After the mission ends, the LLM extracts 3-5 tactical lessons from mission statistics, which are persisted to `logs/lessons_learned.json` (capped at 15, oldest evicted). On the next mission, `build_adaptive_prompt()` appends these lessons to the system prompt, creating a closed loop of continuous improvement.
+
+---
+
+## 10. Pheromone System
 
 Three pheromone layers, their triggers, decay, and effect on drone navigation.
 
@@ -403,7 +423,7 @@ flowchart TB
 
 ---
 
-## 10. Triage Decision Tree
+## 11. Triage Decision Tree
 
 Priority protocol when multiple survivors are found.
 

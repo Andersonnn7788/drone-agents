@@ -1,4 +1,6 @@
-"""FastMCP server — 18 @mcp.tool() definitions wrapping the drone swarm simulation."""
+"""FastMCP server — 19 @mcp.tool() definitions wrapping the drone swarm simulation."""
+
+import os
 
 from mcp.server.fastmcp import FastMCP
 from simulation.state import get_model
@@ -344,6 +346,29 @@ def coordinate_swarm(assignments: dict = None) -> dict:
     Drones will prefer scanning within their assigned sector during autonomous navigation."""
     model = get_model()
     return model.coordinate_swarm(assignments)
+
+
+# ── Performance / Adaptive Learning Tools ─────────────────────────────
+
+@mcp.tool()
+def get_performance_score() -> dict:
+    """Get the current mission performance score and breakdown.
+    Use this to evaluate how effective your strategy is mid-mission.
+    Returns total score, letter grade, rescue points, speed bonus, coverage bonus,
+    death penalty, efficiency bonus, and mission progress percentage.
+    Call this at least once mid-mission to assess and adapt your strategy."""
+    model = get_model()
+    score = model.compute_score()
+    max_steps = int(os.environ.get("MAX_MISSION_STEPS", "50"))
+    progress = round(model.mission_step / max_steps * 100, 1)
+    return {
+        **score,
+        "mission_step": model.mission_step,
+        "max_steps": max_steps,
+        "mission_progress_pct": progress,
+        "steps_remaining": max_steps - model.mission_step,
+        "performance_grade": score["grade"],
+    }
 
 
 # ── Entry point ────────────────────────────────────────────────────────

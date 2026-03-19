@@ -152,6 +152,7 @@ class DroneAgent(mesa.Agent):
             }
 
         survivor.rescued = True
+        self.model.record_rescue(self.drone_id, survivor.unique_id, survivor.severity, survivor.health)
         self.model.grid.remove_agent(survivor)
         return {
             "success": True,

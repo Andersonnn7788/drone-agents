@@ -14,8 +14,11 @@ import uvicorn
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_mcp_adapters.tools import load_mcp_tools
 
+from langchain_openai import ChatOpenAI
+
 from simulation.state import get_model
 from agent.shared import set_start_trigger, set_mission_complete
+from agent.memory import load_lessons, add_lessons, get_mission_count
 from .graph import build_graph, _log_to_model
 
 
@@ -89,6 +92,64 @@ async def wait_for_server(url: str, name: str, max_retries: int = 5):
 
 
 # ── Mission log persistence ──────────────────────────────────────────
+
+async def _generate_post_mission_lessons(model):
+    """Use LLM to extract tactical lessons from the completed mission."""
+    try:
+        score = model.compute_score()
+        state = model.get_state()
+        stats = state["stats"]
+        mission_num = get_mission_count() + 1
+
+        summary = (
+            f"Mission #{mission_num} complete. Score: {score['total']} (Grade: {score['grade']}). "
+            f"Steps: {model.mission_step}. "
+            f"Rescued: {stats['rescued']}/{stats['total_survivors']}. "
+            f"Coverage: {stats['coverage_pct']}%. "
+            f"Active drones remaining: {stats['active_drones']}/{stats['total_drones']}. "
+            f"Rescue events: {json.dumps(score.get('rescue_events', []))}. "
+            f"Death penalty: {score['death_penalty']}. "
+            f"Disaster events: {len(state.get('disaster_events', []))}."
+        )
+
+        model_name = os.environ.get("LLM_MODEL", "gpt-5-mini")
+        llm = ChatOpenAI(model=model_name, temperature=0.3, max_tokens=1024)
+
+        prompt = (
+            "You are analyzing a completed drone search-and-rescue mission. "
+            "Extract 3-5 tactical lessons learned. For each lesson, provide a JSON object with:\n"
+            '- "lesson": a concise tactical rule (1 sentence)\n'
+            '- "evidence": what happened in this mission that supports it\n'
+            '- "priority": "high", "medium", or "low"\n\n'
+            f"Mission summary:\n{summary}\n\n"
+            "Respond with ONLY a JSON array of lesson objects. No markdown, no explanation."
+        )
+
+        response = await llm.ainvoke([{"role": "user", "content": prompt}])
+        content = response.content.strip()
+
+        # Strip markdown code fences if present
+        if content.startswith("```"):
+            content = content.split("\n", 1)[1] if "\n" in content else content[3:]
+            if content.endswith("```"):
+                content = content[:-3]
+            content = content.strip()
+
+        lessons = json.loads(content)
+        if isinstance(lessons, list):
+            add_lessons(lessons, mission_num, score)
+            _log_to_model(
+                f"Post-mission analysis complete: {len(lessons)} lessons extracted. "
+                f"Mission #{mission_num}, Score: {score['total']} ({score['grade']})",
+                msg_type="reflection",
+                is_critical=True,
+            )
+            print(f"\nPost-mission: {len(lessons)} lessons extracted and saved.")
+        else:
+            print("\nPost-mission: LLM returned non-list response, skipping lessons.")
+    except Exception as e:
+        print(f"\nPost-mission lesson extraction failed: {e}")
+
 
 def save_mission_log(model):
     """Save agent_logs + final stats to logs/mission_log.json."""
@@ -168,6 +229,9 @@ async def _execute_mission(tools):
     print("=" * 60)
 
     save_mission_log(model)
+
+    # Post-mission lesson extraction
+    await _generate_post_mission_lessons(model)
 
 
 async def run_mission():

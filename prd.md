@@ -56,7 +56,7 @@ npx create-next-app@latest dashboard --typescript --tailwind --app --eslint
                ▼                             ▼
 ┌──────────────────────┐         ┌──────────────────────────────────┐
 │   LangGraph Agent    │◄───────►│      MCP Server (FastMCP)        │
-│   (Command Agent)    │  MCP    │  18 Tools: discover, move, scan, │
+│   (Command Agent)    │  MCP    │  19 Tools: discover, move, scan, │
 │   Strategic Reasoning│  HTTP   │  battery, heatmap, simulate,     │
 │   + Triage Decisions │         │  rescue, pheromones, triage,     │
 │                      │         │  swarm, relay, resilience...     │
@@ -128,13 +128,14 @@ project-root/
 │
 ├── mcp_server/
 │   ├── __init__.py
-│   └── server.py             # FastMCP server with all 18 @mcp.tool() definitions
+│   └── server.py             # FastMCP server with all 19 @mcp.tool() definitions
 │
 ├── agent/
 │   ├── __init__.py
 │   ├── graph.py              # LangGraph StateGraph (3 nodes: agent, tools, nudge)
 │   ├── prompts.py            # System prompt + demo prompt for Command Agent (with triage rules)
 │   ├── runner.py             # Entry point: daemon threads for MCP + API bridge, waits for dashboard Start
+│   ├── memory.py             # Post-mission lesson extraction and adaptive prompt builder
 │   └── shared.py             # Shared state (start trigger, mission complete flag)
 │
 ├── api/
@@ -162,7 +163,8 @@ project-root/
 │   └── demo.py               # Scripted demo sequence for presentation
 │
 └── logs/
-    └── mission_log.json      # Persisted agent reasoning + tool calls
+    ├── mission_log.json      # Persisted agent reasoning + tool calls
+    └── lessons_learned.json  # Persisted tactical lessons from past missions
 ```
 
 ---
@@ -311,7 +313,7 @@ Use `FastMCP` from the official `mcp` Python SDK. The server holds a reference t
 **Transport:** Streamable HTTP (`mcp.run(transport="streamable-http")`)
 **Default URL:** `http://localhost:8000/mcp`
 
-### Tools to Implement (18 Total)
+### Tools to Implement (19 Total)
 
 Each tool is a decorated function using `@mcp.tool()`:
 
@@ -381,7 +383,7 @@ Each tool is a decorated function using `@mcp.tool()`:
     - Marks the survivor as rescued so their health stops draining
     - Call this AFTER moving to a found survivor's cell
 
-#### Innovation Tools (6 new differentiators)
+#### Innovation Tools (7 new differentiators)
 
 13. **`get_pheromone_map() -> dict`**
     - Returns all three pheromone layers as 12x12 2D arrays: `scanned`, `survivor_nearby`, `danger`
@@ -417,6 +419,12 @@ Each tool is a decorated function using `@mcp.tool()`:
     - If no assignments: auto-divide the 12x12 grid into quadrants among active drones
     - Returns: drone-to-sector mapping
     - Drones with `assigned_sector` will prefer scanning within their assigned sector during autonomous navigation
+
+19. **`get_performance_score() -> dict`**
+    - Returns current mission performance score and breakdown
+    - Data: total score, letter grade (A–F), rescue_points, speed_bonus, coverage_bonus, death_penalty, efficiency_bonus, mission_step, mission_progress_pct, steps_remaining
+    - Grade scale: A(>=500), B(>=350), C(>=200), D(>=100), F(<100)
+    - Agent should call this mid-mission to evaluate and adapt strategy
 
 ---
 
@@ -482,6 +490,14 @@ Mission succeeds when all LIVING survivors are located. Minimize steps, battery 
 # with explicit instructions to keep operating for 13+ steps to handle all scripted events.
 ```
 
+#### Adaptive Prompt Evolution
+
+```python
+def build_adaptive_prompt(base_prompt: str, lessons_block: str, mission_num: int) -> str:
+    """Appends an 'Adaptive Intelligence — Mission #N' section to the system prompt
+    with numbered lessons from past missions. Only added if lessons exist."""
+```
+
 ### File: `agent/graph.py`
 
 Build a LangGraph `StateGraph` with `MessagesState`:
@@ -501,6 +517,10 @@ Edges:
   - "tools" -> "agent" (loop back for next reasoning step)
   - "nudge" -> "agent" (loop back to re-prompt the agent)
 ```
+
+Mid-mission reflection: Every `REFLECTION_INTERVAL = 5` steps, the tools node injects a
+`SystemMessage` with the current `compute_score()` breakdown, prompting the agent to reflect
+on what is working, what should change, and whether it is prioritizing correctly.
 
 Message windowing: controlled by `MSG_WINDOW_SIZE` env var (0 = disabled). When enabled, trims older messages while preserving tool call/result pairs.
 
@@ -530,7 +550,8 @@ Entry point that:
 5. Waits for the dashboard "Start Mission" button (via `agent/shared.py` start trigger)
 6. Invokes with initial message: "Begin search and rescue mission. Discover your fleet and plan your approach."
 7. Streams agent reasoning + tool calls to `logs/mission_log.json`
-8. Marks mission complete via `agent/shared.py` when done
+8. On mission completion, calls `_generate_post_mission_lessons()` which uses the LLM (temperature=0.3) to extract 3-5 tactical lessons from mission stats and saves them to `logs/lessons_learned.json`
+9. Marks mission complete via `agent/shared.py` when done
 
 ---
 
@@ -643,6 +664,8 @@ Serves current simulation state to the frontend dashboard. **Primary transport i
 - `GET /api/mesh` — returns current mesh network topology as adjacency list
 - `GET /api/health` — health check with mission status (running, complete, idle)
 - `POST /api/reset` — reset simulation to fresh state
+- `GET /api/score` — returns current mission score breakdown (total, grade, rescue_points, speed_bonus, coverage_bonus, death_penalty, efficiency_bonus)
+- `GET /api/lessons` — returns accumulated tactical lessons from past missions
 
 **Run:** `uvicorn api.bridge:app --port 8001`
 
@@ -1049,17 +1072,19 @@ Use this scripted sequence for the live demo. The demo is designed as a **dramat
 
 7. **Mission Replay Timeline** — Judges can rewind to any step and review any decision. No other team will have this. It turns a live demo into an explorable experience.
 
+8. **RL-Inspired Adaptive Learning** — The agent gets smarter across missions. A scoring engine grades performance (A–F), mid-mission reflection checkpoints force strategy adaptation, and post-mission lesson extraction persists tactical knowledge for prompt evolution. No other team will have cross-mission learning.
+
 ### Baseline Differentiators (from original PRD)
 
-8. **Bayesian Heatmap Intelligence** — Agent doesn't randomly scan. It uses probability-driven search that updates in real-time.
+9. **Bayesian Heatmap Intelligence** — Agent doesn't randomly scan. It uses probability-driven search that updates in real-time.
 
-9. **Real Communication Failure** — Actually sever connections, buffer data, and self-heal through mesh relay. Not just a checkbox.
+10. **Real Communication Failure** — Actually sever connections, buffer data, and self-heal through mesh relay. Not just a checkbox.
 
-10. **Digital Twin Planning** — Agent simulates before committing. Chain-of-thought shows "I ran 3 simulations, option B is optimal because..."
+11. **Digital Twin Planning** — Agent simulates before committing. Chain-of-thought shows "I ran 3 simulations, option B is optimal because..."
 
-11. **Dynamic Fleet Discovery** — No hard-coded drone IDs. Agent discovers the fleet each time, adapts when drones go offline or new ones come online.
+12. **Dynamic Fleet Discovery** — No hard-coded drone IDs. Agent discovers the fleet each time, adapts when drones go offline or new ones come online.
 
-12. **Visible Reasoning** — Dashboard shows the LLM's chain-of-thought in real-time. Judges see WHY each decision was made.
+13. **Visible Reasoning** — Dashboard shows the LLM's chain-of-thought in real-time. Judges see WHY each decision was made.
 
 ---
 
@@ -1070,7 +1095,7 @@ Use this scripted sequence for the live demo. The demo is designed as a **dramat
 | Time Block | Task | Details |
 |---|---|---|
 | Morning (3-4h) | Mesa simulation engine | `model.py`: grid, terrain, PropertyLayers (heatmap + 3 pheromones), disaster progression (aftershocks, rising water). `agents.py`: DroneAgent with full local autonomy methods, SurvivorAgent with health decay. `mesh_network.py`: topology, blackout, relay, resilience analysis. |
-| Afternoon (3-4h) | MCP server + all 18 tools | `server.py`: implement all tool functions against the Mesa model. Test each tool in isolation with `mcp dev`. Focus on core tools first (1-12), then innovation tools (13-18). |
+| Afternoon (3-4h) | MCP server + all 19 tools | `server.py`: implement all tool functions against the Mesa model. Test each tool in isolation with `mcp dev`. Focus on core tools first (1-12), then innovation tools (13-19). |
 | Evening (2-3h) | LangGraph agent + system prompt | `prompts.py`: full system prompt with triage protocol. `graph.py`: StateGraph with MessagesState. `runner.py`: entry point with MCP client. Test agent loop end-to-end: does it discover, scan, triage, handle blackout? |
 | **Day 1 deliverable** | Agent runs a full mission via MCP against the simulation. Triage works, pheromones work, disasters fire. No frontend yet — validate in terminal. |
 
@@ -1162,5 +1187,8 @@ MSG_WINDOW_SIZE=0
 - [ ] Dashboard updates via SSE with smooth CSS transitions and scan pulse animations (SSE Streaming)
 - [ ] Voice narration reads critical agent decisions aloud via SpeechSynthesis (Voice Narration)
 - [ ] Timeline slider enables judges to rewind and replay any step of the mission (Mission Replay)
-- [ ] All 18 MCP tools are functional (12 core + 6 innovation)
+- [ ] All 19 MCP tools are functional (12 core + 7 innovation)
+- [ ] Agent receives performance score checkpoints every 5 steps and reflects on strategy (Adaptive Learning)
+- [ ] Post-mission lessons are extracted and persisted to lessons_learned.json (Adaptive Learning)
+- [ ] Past lessons are injected into next mission's system prompt (Adaptive Learning)
 - [ ] Demo script produces at least 5 distinct "wow moments" for judges

@@ -1,6 +1,14 @@
 'use client';
 
-import { DroneStatus, Severity, SimState } from '@/lib/api';
+import { DroneStatus, GameScore, ScoreBreakdown, Severity, SimState } from '@/lib/api';
+
+const GRADE_COLORS: Record<string, string> = {
+  A: 'text-green-400',
+  B: 'text-blue-400',
+  C: 'text-yellow-400',
+  D: 'text-orange-400',
+  F: 'text-red-400',
+};
 
 const DRONE_ORDER = ['drone_alpha', 'drone_bravo', 'drone_charlie', 'drone_delta'];
 
@@ -40,9 +48,14 @@ function healthBarColor(severity: Severity, alive: boolean): string {
 
 interface DronePanelProps {
   state: SimState | null;
+  gameScore?: GameScore;
+  scorePop?: boolean;
+  livesPop?: boolean;
+  backendScore?: ScoreBreakdown | null;
+  missionNum?: number;
 }
 
-export default function DronePanel({ state }: DronePanelProps) {
+export default function DronePanel({ state, gameScore, scorePop, livesPop, backendScore, missionNum }: DronePanelProps) {
   if (!state) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -53,6 +66,60 @@ export default function DronePanel({ state }: DronePanelProps) {
 
   return (
     <div className="flex flex-col gap-2 overflow-y-auto min-h-0 panel-scroll">
+
+      {/* Gamification Score Panel — backend-powered */}
+      {(gameScore || backendScore) && (
+        <div className="bg-gray-900 rounded-lg p-2.5 border border-gray-700 flex-shrink-0">
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="text-[9px] text-gray-400 uppercase tracking-widest font-semibold">
+              Mission Score
+            </div>
+            {missionNum && missionNum > 1 && (
+              <span className="text-[8px] px-1.5 py-0.5 rounded bg-purple-900/50 text-purple-300 border border-purple-700 font-medium">
+                AI Mission #{missionNum}
+              </span>
+            )}
+          </div>
+          <div className="flex items-end justify-between mb-1.5">
+            <div className="flex items-baseline gap-2">
+              <span
+                className={`text-2xl font-black text-yellow-400 leading-none tabular-nums ${scorePop ? 'score-pop' : ''}`}
+              >
+                {(backendScore?.total ?? gameScore?.total ?? 0).toLocaleString()}
+              </span>
+              {backendScore && (
+                <span className={`text-xl font-black leading-none ${GRADE_COLORS[backendScore.grade] ?? 'text-gray-400'}`}>
+                  {backendScore.grade}
+                </span>
+              )}
+            </div>
+            <span className="text-[9px] text-gray-500 uppercase tracking-wide mb-0.5">pts</span>
+          </div>
+          {backendScore && (
+            <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[8px] text-gray-500 mb-1.5">
+              <span>Rescue: {backendScore.rescue_points}</span>
+              <span>Cov: +{backendScore.coverage_bonus}</span>
+              {backendScore.speed_bonus > 0 && <span>Speed: +{backendScore.speed_bonus}</span>}
+              {backendScore.death_penalty > 0 && <span className="text-red-400">Deaths: -{backendScore.death_penalty}</span>}
+              <span>Eff: +{backendScore.efficiency_bonus}</span>
+            </div>
+          )}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <span className="text-[9px] text-gray-400">Lives Saved:</span>
+              <span className={`text-sm font-bold text-green-400 tabular-nums ${livesPop ? 'lives-pop' : ''}`}>
+                {backendScore?.rescues ?? gameScore?.livesSaved ?? 0}
+              </span>
+            </div>
+            {gameScore && gameScore.streak >= 2 && (
+              <div className="streak-pulse-badge px-1.5 py-0.5 rounded text-[9px] font-black text-yellow-900 bg-yellow-400">
+                {gameScore.streak}x STREAK
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Drone cards */}
       {DRONE_ORDER.map((id) => {
         const d = state.drones[id];
@@ -133,8 +200,12 @@ export default function DronePanel({ state }: DronePanelProps) {
           {state.survivors.map((s) => (
             <div
               key={s.survivor_id}
-              className={`bg-gray-50 rounded p-1.5 border flex-shrink-0 ${
-                !s.alive ? 'border-gray-200 opacity-40' : 'border-gray-200'
+              className={`rounded p-1.5 border flex-shrink-0 transition-colors ${
+                s.rescued
+                  ? 'border-green-200 bg-green-50/50'
+                  : !s.alive
+                    ? 'border-gray-200 bg-gray-50 opacity-40'
+                    : 'border-gray-200 bg-gray-50'
               }`}
             >
               <div className="flex items-center justify-between mb-0.5">
@@ -148,9 +219,11 @@ export default function DronePanel({ state }: DronePanelProps) {
                     #{s.survivor_id}
                   </span>
                   {s.rescued && (
-                    <span className="text-[9px] text-green-700 font-medium">RESCUED</span>
+                    <span className="text-[9px] px-1 py-0.5 rounded bg-green-100 text-green-700 border border-green-300 font-bold">
+                      ✓ RESCUED
+                    </span>
                   )}
-                  {!s.alive && (
+                  {!s.alive && !s.rescued && (
                     <span className="text-[9px] text-gray-500 font-medium">DECEASED</span>
                   )}
                 </div>
@@ -160,7 +233,7 @@ export default function DronePanel({ state }: DronePanelProps) {
               </div>
               <div className="bg-gray-200 rounded-full h-1.5">
                 <div
-                  className={`h-1.5 rounded-full bar-transition ${healthBarColor(s.severity, s.alive)}`}
+                  className={`h-1.5 rounded-full bar-transition ${s.rescued ? 'bg-green-400' : healthBarColor(s.severity, s.alive)}`}
                   style={{ width: `${Math.max(0, s.health * 100)}%` }}
                 />
               </div>

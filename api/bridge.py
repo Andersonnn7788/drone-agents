@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from simulation.state import get_model, reset_model
 from agent.shared import get_start_trigger, is_mission_complete
+from agent.memory import load_lessons
 
 app = FastAPI(title="Drone Swarm API Bridge")
 
@@ -57,6 +58,7 @@ async def _sse_generator():
     last_disaster_count = 0
     last_drone_hash = ""
     last_survivor_hash = ""
+    last_warning_count = 0
 
     # Send initial state immediately
     model = get_model()
@@ -98,6 +100,16 @@ async def _sse_generator():
             last_log_count = current_log_count
             yield f"event: logs\ndata: {json.dumps(new_logs)}\n\n"
 
+        # Check for new warning events
+        current_warning_count = len(model.warning_events)
+        if current_warning_count > last_warning_count:
+            new_warnings = model.warning_events[last_warning_count:]
+            last_warning_count = current_warning_count
+            for warning in new_warnings:
+                # Strip internal pending_id before sending
+                w = {k: v for k, v in warning.items() if k != "pending_id"}
+                yield f"event: warning\ndata: {json.dumps(w)}\n\n"
+
         # Check for new disaster events
         current_disaster_count = len(model.disaster_events)
         if current_disaster_count > last_disaster_count:
@@ -116,6 +128,7 @@ async def _sse_generator():
                 "stats": state["stats"],
                 "disaster_event_count": len(model.disaster_events),
                 "status": "completed",
+                "score": model.compute_score(),
             }
             yield f"event: mission_complete\ndata: {json.dumps(completion_data)}\n\n"
             break
@@ -166,6 +179,18 @@ async def get_history():
 async def get_mesh():
     """Current mesh network topology."""
     return get_model().mesh_topology
+
+
+@app.get("/api/score")
+async def get_score():
+    """Current mission score breakdown."""
+    return get_model().compute_score()
+
+
+@app.get("/api/lessons")
+async def get_lessons():
+    """Lessons learned from past missions."""
+    return load_lessons()
 
 
 @app.get("/api/health")

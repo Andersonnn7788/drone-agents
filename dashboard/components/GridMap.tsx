@@ -7,6 +7,7 @@ import {
   SimState,
   SurvivorState,
   TerrainType,
+  WarningEvent,
 } from '@/lib/api';
 
 const GRID_SIZE = 12;
@@ -86,9 +87,12 @@ interface GridMapProps {
   state: SimState | null;
   gridEffect?: 'aftershock' | 'water' | null;
   isReplaying?: boolean;
+  newlyFoundIds?: Set<number>;
+  rescueBursts?: Map<number, [number, number]>;
+  activeWarnings?: WarningEvent[];
 }
 
-export default function GridMap({ state, gridEffect, isReplaying }: GridMapProps) {
+export default function GridMap({ state, gridEffect, isReplaying, newlyFoundIds, rescueBursts, activeWarnings }: GridMapProps) {
   // Build O(1) lookup maps from state
   const survivorsByPos = useMemo<Map<string, SurvivorState[]>>(() => {
     const map = new Map<string, SurvivorState[]>();
@@ -118,6 +122,22 @@ export default function GridMap({ state, gridEffect, isReplaying }: GridMapProps
     prevScannedRef.current = new Set(scannedSet);
     return fresh;
   }, [scannedSet]);
+
+  // Compute warning cell set from active (unresolved) warnings
+  const warningCells = useMemo(() => {
+    const set = new Set<string>();
+    for (const w of activeWarnings ?? []) {
+      if (w.resolved) continue;
+      const [cx, cy] = w.estimated_center;
+      for (let dx = -1; dx <= 1; dx++)
+        for (let dy = -1; dy <= 1; dy++) {
+          const nx = cx + dx, ny = cy + dy;
+          if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE)
+            set.add(`${nx},${ny}`);
+        }
+    }
+    return set;
+  }, [activeWarnings]);
 
   // Track grid container size for absolute drone positioning
   const gridRef = useRef<HTMLDivElement>(null);
@@ -284,6 +304,11 @@ export default function GridMap({ state, gridEffect, isReplaying }: GridMapProps
             <div className="absolute inset-0 pointer-events-none aftershock-cell-flash z-20" />
           )}
 
+          {/* Warning zone pulse overlay */}
+          {warningCells.has(posKey) && (
+            <div className="absolute inset-0 pointer-events-none warning-zone-pulse" style={{ zIndex: 18 }} />
+          )}
+
           {/* Blackout overlay */}
           {inBlackout && (
             <div className="absolute inset-0 bg-purple-950/50 pointer-events-none" />
@@ -318,6 +343,20 @@ export default function GridMap({ state, gridEffect, isReplaying }: GridMapProps
           Step {state.mission_step} &middot; {state.stats.coverage_pct}% covered
         </span>
       </div>
+
+      {/* Warning banners */}
+      {(activeWarnings ?? []).filter((w) => !w.resolved).map((w, i) => (
+        <div
+          key={`${w.type}-${w.step}-${i}`}
+          className="warning-banner-in flex items-center gap-2 px-3 py-1.5 rounded border border-amber-300 bg-amber-50 flex-shrink-0 mb-1"
+        >
+          <span className="warning-icon-shake text-amber-600 text-sm font-bold">&#9888;</span>
+          <span className="text-xs font-semibold text-amber-800 flex-1">{w.message}</span>
+          <span className="text-[9px] text-amber-500 font-mono">
+            ({w.estimated_center[0]},{w.estimated_center[1]})
+          </span>
+        </div>
+      ))}
 
       <div
         ref={wrapperRef}
@@ -538,7 +577,7 @@ export default function GridMap({ state, gridEffect, isReplaying }: GridMapProps
             const cellSize = gridSize.width / GRID_SIZE;
             const S_MARKER = 16;
 
-            // Group by cell for offset logic (same pattern as drones)
+            // Group by cell for offset logic — exclude rescued survivors
             const survivorsByCell = new Map<string, number>();
             const survivorIndex = new Map<number, number>();
             for (const s of state.survivors) {
@@ -550,78 +589,180 @@ export default function GridMap({ state, gridEffect, isReplaying }: GridMapProps
             }
 
             return state.survivors.map((s) => {
-              if (!s.position || s.rescued) return null;
+              if (!s.position) return null;
 
               const color = !s.alive ? '#6b7280' : (SEVERITY_COLORS[s.severity] ?? '#fff');
-              const idx = survivorIndex.get(s.survivor_id) ?? 0;
-              const total = survivorsByCell.get(`${s.position[0]},${s.position[1]}`) ?? 1;
+              const isNewlyFound = newlyFoundIds?.has(s.survivor_id) ?? false;
 
+              // Rescued survivors: show muted ✓ marker (burst overlay handled separately)
+              if (s.rescued) {
+                if (rescueBursts?.has(s.survivor_id)) return null; // burst is showing
+                const left = s.position[0] * cellSize + cellSize / 2 - S_MARKER / 2;
+                const top  = (GRID_SIZE - 1 - s.position[1]) * cellSize + cellSize / 2 - S_MARKER / 2;
+                return (
+                  <div
+                    key={s.survivor_id}
+                    className="pointer-events-none rescue-muted-in"
+                    style={{
+                      position: 'absolute', left, top,
+                      width: S_MARKER, height: S_MARKER,
+                      borderRadius: '50%',
+                      background: 'rgba(107,114,128,0.25)',
+                      border: '1.5px solid rgba(107,114,128,0.4)',
+                      zIndex: 8,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}
+                  >
+                    <span style={{ fontSize: 8, color: 'rgba(255,255,255,0.7)', fontWeight: 900, lineHeight: 1 }}>✓</span>
+                  </div>
+                );
+              }
+
+              const idx   = survivorIndex.get(s.survivor_id) ?? 0;
+              const total = survivorsByCell.get(`${s.position[0]},${s.position[1]}`) ?? 1;
               const offsetX = total > 1 ? (idx % 2) * 14 - 7 : 0;
               const offsetY = total > 1 ? Math.floor(idx / 2) * 14 - (total > 2 ? 7 : 0) : 0;
 
               const left = s.position[0] * cellSize + cellSize / 2 - S_MARKER / 2 + offsetX;
-              const top = (GRID_SIZE - 1 - s.position[1]) * cellSize + cellSize / 2 - S_MARKER / 2 + offsetY;
+              const top  = (GRID_SIZE - 1 - s.position[1]) * cellSize + cellSize / 2 - S_MARKER / 2 + offsetY;
 
               const healthColor = s.health > 0.6 ? '#4ade80' : s.health > 0.3 ? '#fbbf24' : '#f87171';
               const label = s.severity === 'CRITICAL' ? '!' : s.severity === 'MODERATE' ? '+' : '·';
-              const animClass = !s.alive ? '' : s.severity === 'CRITICAL' ? 'survivor-critical-pulse' : 'survivor-pulse';
+
+              const isFound    = s.found && s.alive;
+              const isCritical = s.severity === 'CRITICAL';
+
+              // SOS ring speed: faster as health drops (0.6s near-death → 2.0s full health)
+              const sosDuration   = (0.6 + s.health * 1.4).toFixed(2) + 's';
+              const sosBlinkSpeed = (0.4 + s.health * 0.6).toFixed(2) + 's';
+
+              // Unfound survivors keep existing pulse; found+alive get SOS rings instead
+              const animClass = !s.alive ? '' : isFound ? '' : isCritical ? 'survivor-critical-pulse' : 'survivor-pulse';
 
               return (
                 <div
                   key={s.survivor_id}
-                  className={`pointer-events-none ${animClass}`}
-                  style={{
-                    position: 'absolute',
-                    left,
-                    top,
-                    width: S_MARKER,
-                    height: S_MARKER,
-                    borderRadius: '50%',
-                    background: s.alive
-                      ? `radial-gradient(circle at 38% 32%, ${color}ee, ${color}77)`
-                      : 'rgba(107,114,128,0.5)',
-                    border: `1.5px solid ${color}`,
-                    boxShadow: s.alive ? `0 0 8px ${color}88, 0 0 2px rgba(0,0,0,0.5)` : 'none',
-                    opacity: s.alive ? 1 : 0.35,
-                    zIndex: 8,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
+                  className="pointer-events-none"
+                  style={{ position: 'absolute', left, top, width: S_MARKER, height: S_MARKER, zIndex: 9 }}
                 >
-                  <span style={{
-                    fontSize: 8,
-                    fontWeight: 900,
-                    color: '#fff',
-                    lineHeight: 1,
-                    textShadow: '0 1px 2px rgba(0,0,0,0.9)',
-                    userSelect: 'none',
-                  }}>
-                    {label}
-                  </span>
-                  {s.alive && (
-                    <div style={{
-                      position: 'absolute',
-                      bottom: -5,
-                      left: 0,
+                  {/* SOS sonar rings — only when found+alive */}
+                  {isFound && (
+                    <>
+                      <div
+                        className="sos-ring"
+                        style={{
+                          position: 'absolute',
+                          inset: -S_MARKER / 2,
+                          borderRadius: '50%',
+                          border: `2px solid ${color}`,
+                          '--sos-duration': sosDuration,
+                        } as React.CSSProperties}
+                      />
+                      <div
+                        className="sos-ring"
+                        style={{
+                          position: 'absolute',
+                          inset: -S_MARKER / 2,
+                          borderRadius: '50%',
+                          border: `1.5px solid ${color}`,
+                          animationDelay: `calc(${sosDuration} / -2)`,
+                          '--sos-duration': sosDuration,
+                        } as React.CSSProperties}
+                      />
+                      {isCritical && (
+                        <div
+                          className="sos-blink"
+                          style={{
+                            position: 'absolute',
+                            top: -14,
+                            left: '50%',
+                            transform: 'translateX(-50%)',
+                            fontSize: 7,
+                            fontWeight: 900,
+                            color,
+                            letterSpacing: '0.1em',
+                            textShadow: '0 0 4px rgba(0,0,0,0.9)',
+                            whiteSpace: 'nowrap',
+                            '--sos-blink-speed': sosBlinkSpeed,
+                          } as React.CSSProperties}
+                        >
+                          SOS
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* Core marker circle */}
+                  <div
+                    className={animClass}
+                    style={{
                       width: S_MARKER,
-                      height: 2.5,
-                      background: 'rgba(0,0,0,0.45)',
-                      borderRadius: 2,
-                    }}>
-                      <div style={{
-                        width: `${s.health * 100}%`,
-                        height: '100%',
-                        background: healthColor,
-                        borderRadius: 2,
-                        transition: 'width 0.5s ease',
-                      }} />
+                      height: S_MARKER,
+                      borderRadius: '50%',
+                      background: s.alive
+                        ? `radial-gradient(circle at 38% 32%, ${color}ee, ${color}77)`
+                        : 'rgba(107,114,128,0.5)',
+                      border: `1.5px solid ${color}`,
+                      boxShadow: s.alive ? `0 0 8px ${color}88, 0 0 2px rgba(0,0,0,0.5)` : 'none',
+                      opacity: s.alive ? 1 : 0.35,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <span style={{ fontSize: 8, fontWeight: 900, color: '#fff', lineHeight: 1, textShadow: '0 1px 2px rgba(0,0,0,0.9)', userSelect: 'none' }}>
+                      {label}
+                    </span>
+                    {s.alive && (
+                      <div style={{ position: 'absolute', bottom: -5, left: 0, width: S_MARKER, height: 2.5, background: 'rgba(0,0,0,0.45)', borderRadius: 2 }}>
+                        <div style={{ width: `${s.health * 100}%`, height: '100%', background: healthColor, borderRadius: 2, transition: 'width 0.5s ease' }} />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Discovery reveal badge — bounces in when newly found */}
+                  {isNewlyFound && (
+                    <div
+                      className="discovery-reveal"
+                      style={{
+                        position: 'absolute',
+                        top: -26,
+                        left: '50%',
+                        background: color,
+                        borderRadius: 4,
+                        padding: '2px 5px',
+                        whiteSpace: 'nowrap',
+                        boxShadow: `0 0 10px ${color}88`,
+                        zIndex: 20,
+                        pointerEvents: 'none',
+                      }}
+                    >
+                      <span style={{ fontSize: 7, fontWeight: 900, color: '#fff', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                        FOUND!
+                      </span>
                     </div>
                   )}
                 </div>
               );
             });
           })()}
+
+          {/* Rescue burst overlays — green rings + checkmark at rescue position */}
+          {gridSize.width > 0 && rescueBursts && Array.from(rescueBursts.entries()).map(([id, pos]) => {
+            const cellSize = gridSize.width / GRID_SIZE;
+            const BURST = 28;
+            const left = pos[0] * cellSize + cellSize / 2 - BURST / 2;
+            const top  = (GRID_SIZE - 1 - pos[1]) * cellSize + cellSize / 2 - BURST / 2;
+            return (
+              <div key={`burst-${id}`} className="pointer-events-none" style={{ position: 'absolute', left, top, width: BURST, height: BURST, zIndex: 30 }}>
+                <div className="rescue-burst-ring" style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '3px solid #22c55e', boxShadow: '0 0 10px #22c55e88' }} />
+                <div className="rescue-burst-ring2" style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '2px solid #4ade80' }} />
+                <div className="rescue-check-pop" style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <span style={{ fontSize: 13, color: '#22c55e', fontWeight: 900, textShadow: '0 0 8px rgba(0,0,0,0.8)', opacity: 0 }}>✓</span>
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -640,6 +781,10 @@ export default function GridMap({ state, gridEffect, isReplaying }: GridMapProps
         <span className="flex items-center gap-1 text-[9px] text-gray-500">
           <span className="inline-block w-2 h-2 rounded-sm bg-purple-950/50" />
           Blackout
+        </span>
+        <span className="flex items-center gap-1 text-[9px] text-gray-500">
+          <span className="inline-block w-2 h-2 rounded-sm" style={{ background: 'rgba(245,158,11,0.5)' }} />
+          Warning
         </span>
         <span className="flex items-center gap-1 text-[9px] text-gray-500">
           <span className="inline-block w-4 h-0 border-t-2 border-dashed" style={{ borderColor: '#0891b2' }} />

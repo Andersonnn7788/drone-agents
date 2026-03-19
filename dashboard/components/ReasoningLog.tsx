@@ -12,6 +12,7 @@ const LOG_COLOR: Record<LogType, string> = {
   system: 'text-cyan-600',
   warning: 'text-orange-600',
   error: 'text-red-600',
+  reflection: 'text-pink-600',
 };
 
 const LOG_TAG: Record<LogType, string> = {
@@ -23,6 +24,7 @@ const LOG_TAG: Record<LogType, string> = {
   system: '[SYS]',
   warning: '[WARN]',
   error: '[ERR]',
+  reflection: '[REFLECT]',
 };
 
 function formatTime(ts: number): string {
@@ -101,7 +103,7 @@ export default function ReasoningLog({ logs, voiceEnabled = false }: ReasoningLo
     prevLogCountRef.current = logs.length;
 
     for (const entry of newEntries) {
-      if (entry.is_critical && ['reasoning', 'triage', 'narrative', 'system'].includes(entry.type)) {
+      if (entry.is_critical && ['reasoning', 'triage', 'narrative', 'system', 'reflection'].includes(entry.type)) {
         try {
           const utterance = new SpeechSynthesisUtterance(cleanForSpeech(entry.message));
           utterance.rate = 1.1;
@@ -160,9 +162,11 @@ export default function ReasoningLog({ logs, voiceEnabled = false }: ReasoningLo
           <div
             key={i}
             className={`px-1.5 py-0.5 rounded-sm border-l-2 ${
-              entry.is_critical
-                ? 'bg-red-50 border-red-500'
-                : 'border-transparent'
+              entry.type === 'reflection'
+                ? 'bg-pink-50 border-pink-500'
+                : entry.is_critical
+                  ? 'bg-red-50 border-red-500'
+                  : 'border-transparent'
             }`}
           >
             <span className="text-gray-400 mr-1.5 select-none">
@@ -182,7 +186,7 @@ export default function ReasoningLog({ logs, voiceEnabled = false }: ReasoningLo
             >
               {entry.message}
             </span>
-            {voiceEnabled && entry.is_critical && ['reasoning', 'triage', 'narrative', 'system'].includes(entry.type) && (
+            {voiceEnabled && entry.is_critical && ['reasoning', 'triage', 'narrative', 'system', 'reflection'].includes(entry.type) && (
               <span className="ml-1.5 text-[8px] px-1 py-0.5 rounded bg-yellow-100 text-yellow-700 border border-yellow-200 font-medium">NARR</span>
             )}
           </div>

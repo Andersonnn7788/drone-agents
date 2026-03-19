@@ -10,7 +10,8 @@ from langchain_core.messages import SystemMessage, AIMessage, ToolMessage
 from langgraph.graph import StateGraph, MessagesState, START, END
 
 from simulation.state import get_model
-from .prompts import SYSTEM_PROMPT
+from .prompts import SYSTEM_PROMPT, build_adaptive_prompt
+from .memory import load_lessons, format_lessons_for_prompt, get_mission_count
 
 
 def _summarize_tool_result(tool_name: str, raw_content_blocks: list) -> str | None:
@@ -108,6 +109,20 @@ def _summarize_tool_result(tool_name: str, raw_content_blocks: list) -> str | No
                 except (ValueError, TypeError):
                     pass
             return f"move_to: {parts[0][:100]}" if parts else None
+
+        if tool_name == "get_performance_score":
+            import json as _json
+            for p in parts:
+                try:
+                    data = _json.loads(p)
+                    if isinstance(data, dict):
+                        return (
+                            f"Score: {data.get('total', 0)} pts (grade {data.get('grade', '?')}), "
+                            f"{data.get('mission_progress_pct', 0)}% through mission"
+                        )
+                except (ValueError, TypeError):
+                    pass
+            return None
 
         if tool_name == "coordinate_swarm":
             import json as _json
@@ -333,6 +348,14 @@ def _emit_narrative(tool_name: str, raw_content_blocks: list) -> bool:
             )
             return True
 
+        if tool_name == "get_performance_score":
+            _log_to_model(
+                "Performance checkpoint — reviewing mission effectiveness.",
+                msg_type="reflection",
+                is_critical=True,
+            )
+            return True
+
         if tool_name == "get_priority_map":
             _log_to_model(
                 "Priority heatmap refreshed — targeting high-probability zones.",
@@ -351,6 +374,30 @@ def _emit_narrative(tool_name: str, raw_content_blocks: list) -> bool:
         return False
 
     return False
+
+
+def _normalize_tool_result(result) -> str:
+    """Convert MCP tool result to a plain string for ToolMessage.content."""
+    import json as _json
+    if isinstance(result, str):
+        return result
+    if isinstance(result, (dict, int, float, bool)):
+        return _json.dumps(result)
+    # MCP content blocks (list of TextContent objects)
+    if isinstance(result, list):
+        parts = []
+        for block in result:
+            if hasattr(block, "text"):
+                parts.append(block.text)
+            elif isinstance(block, dict) and "text" in block:
+                parts.append(block["text"])
+            else:
+                parts.append(str(block))
+        return "\n".join(parts)
+    # Single MCP TextContent object
+    if hasattr(result, "text"):
+        return result.text
+    return str(result)
 
 
 def _log_to_model(message: str, msg_type: str = "system", is_critical: bool = False):
@@ -464,12 +511,20 @@ def build_graph(tools: list):
     # Minimum steps in demo mode — must run past all scripted events (last at step 7)
     MIN_DEMO_STEPS = 8
 
-    # Select prompt
+    # Select prompt with adaptive intelligence
     if demo_mode:
         from .prompts import DEMO_SYSTEM_PROMPT
-        system_prompt = DEMO_SYSTEM_PROMPT
+        base_prompt = DEMO_SYSTEM_PROMPT
     else:
-        system_prompt = SYSTEM_PROMPT
+        base_prompt = SYSTEM_PROMPT
+
+    lessons = load_lessons()
+    lessons_block = format_lessons_for_prompt(lessons)
+    mission_num = get_mission_count() + 1
+    system_prompt = build_adaptive_prompt(base_prompt, lessons_block, mission_num)
+
+    if lessons:
+        print(f"  [Adaptive] Mission #{mission_num} — loaded {len(lessons)} lessons from past missions")
 
     def agent_node(state: MessagesState):
         messages = list(state["messages"])
@@ -537,10 +592,12 @@ def build_graph(tools: list):
         for tc in last_ai_msg.tool_calls:
             tool = tools_by_name.get(tc["name"])
 
-            # Track disaster count before advance_simulation so we can detect new events
+            # Track disaster and warning counts before advance_simulation
             pre_advance_disaster_count = None
+            pre_advance_warning_count = None
             if tc["name"] == "advance_simulation":
                 pre_advance_disaster_count = len(get_model().disaster_events)
+                pre_advance_warning_count = len(get_model().warning_events)
 
             if tool is None:
                 msg = ToolMessage(
@@ -552,7 +609,7 @@ def build_graph(tools: list):
                 try:
                     result = await tool.ainvoke(tc["args"])
                     msg = ToolMessage(
-                        content=result,
+                        content=_normalize_tool_result(result),
                         tool_call_id=tc["id"],
                         name=tc["name"],
                     )
@@ -603,6 +660,21 @@ def build_graph(tools: list):
                         "Check affected areas, reroute drones if needed, and report status."
                     )))
 
+            # Check for new warnings after advance_simulation
+            if pre_advance_warning_count is not None:
+                new_warnings = get_model().warning_events[pre_advance_warning_count:]
+                if new_warnings:
+                    desc = "; ".join(w["message"] for w in new_warnings if not w.get("resolved"))
+                    if desc:
+                        _log_to_model(
+                            f"⚠ WARNING: {desc}",
+                            msg_type="warning",
+                            is_critical=True,
+                        )
+                        results.append(SystemMessage(content=(
+                            f"⚠ DISASTER WARNING: {desc}. You have ~1 step to react!"
+                        )))
+
             # Pace move_to calls so SSE can broadcast intermediate positions
             if tc["name"] == "move_to":
                 await asyncio.sleep(0.25)
@@ -614,6 +686,7 @@ def build_graph(tools: list):
         if has_action and not has_advance:
             sim_model = get_model()
             prev_disaster_count = len(sim_model.disaster_events)
+            prev_warning_count = len(sim_model.warning_events)
             sim_model.step()
             _log_to_model(f"Auto-step → step {sim_model.mission_step}", msg_type="system")
             new_disasters = _check_new_disasters(prev_disaster_count)
@@ -625,6 +698,39 @@ def build_graph(tools: list):
                     f"⚠ DISASTER ALERT: {disaster_desc}. "
                     "Check affected areas, reroute drones if needed, and report status."
                 )))
+            # Check for new warnings after auto-advance
+            new_warnings = sim_model.warning_events[prev_warning_count:]
+            if new_warnings:
+                desc = "; ".join(w["message"] for w in new_warnings if not w.get("resolved"))
+                if desc:
+                    _log_to_model(
+                        f"⚠ WARNING: {desc}",
+                        msg_type="warning",
+                        is_critical=True,
+                    )
+                    results.append(SystemMessage(content=(
+                        f"⚠ DISASTER WARNING: {desc}. You have ~1 step to react!"
+                    )))
+
+        # Mid-mission reflection checkpoints
+        REFLECTION_INTERVAL = 5
+        model = get_model()
+        if model.mission_step > 0 and model.mission_step % REFLECTION_INTERVAL == 0:
+            score = model.compute_score()
+            _log_to_model(
+                f"PERFORMANCE CHECKPOINT (step {model.mission_step}): "
+                f"Score={score['total']}, Grade={score['grade']}",
+                msg_type="reflection",
+                is_critical=True,
+            )
+            results.append(SystemMessage(content=(
+                f"PERFORMANCE CHECKPOINT — Step {model.mission_step}\n"
+                f"Score: {score['total']} pts (Grade: {score['grade']})\n"
+                f"Breakdown: rescue={score['rescue_points']}, speed_bonus={score['speed_bonus']}, "
+                f"coverage={score['coverage_bonus']}, death_penalty={score['death_penalty']}\n"
+                f"REFLECT: What is working? What should change? "
+                f"Are you prioritizing the right survivors? Is drone coverage efficient?"
+            )))
 
         return {"messages": results}
 

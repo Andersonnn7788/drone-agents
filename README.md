@@ -59,7 +59,7 @@ flowchart TB
     end
 
     subgraph MCP["MCP Server :8000/mcp"]
-        TOOLS["18 @mcp.tool() endpoints"]
+        TOOLS["19 @mcp.tool() endpoints"]
     end
 
     subgraph Sim["Mesa Simulation Engine"]
@@ -273,6 +273,27 @@ flowchart TB
     RECOMPUTE --> Resilience
 ```
 
+### Adaptive Learning Loop
+
+```mermaid
+flowchart LR
+    MISSION["Mission Execution<br>(N steps)"] --> SCORE["compute_score()<br>Grade: A-F<br>rescue/speed/coverage<br>efficiency/death penalty"]
+
+    SCORE -->|"every 5 steps"| REFLECT["Mid-Mission Reflection<br>LLM reviews score +<br>recent actions → adjusts<br>strategy in real-time"]
+
+    SCORE -->|"mission end"| EXTRACT["Lesson Extraction<br>LLM distills 3-5<br>tactical lessons from<br>mission performance"]
+
+    EXTRACT --> PERSIST["Persist Lessons<br>logs/lessons_learned.json<br>(max 15, FIFO)"]
+
+    PERSIST --> EVOLVE["Prompt Evolution<br>Inject past lessons into<br>next mission's system prompt"]
+
+    EVOLVE -->|"next mission"| MISSION
+
+    style REFLECT fill:#f0e6ff,stroke:#9333ea
+    style EXTRACT fill:#e6f7ff,stroke:#0284c7
+    style EVOLVE fill:#fef3c7,stroke:#d97706
+```
+
 ---
 
 ## Tech Stack
@@ -306,9 +327,11 @@ flowchart TB
 
 - **Voice Narration** — Browser SpeechSynthesis reads critical log entries aloud. Toggle on/off from the control panel.
 
+- **RL-Inspired Adaptive Learning** — Closed feedback loop that makes the agent smarter across missions. A scoring engine grades each mission (A–F) across rescue rate, speed, coverage, efficiency, and death penalty. Mid-mission reflection checkpoints every 5 steps let the LLM review its score and adjust strategy in real-time. Post-mission lesson extraction uses the LLM to distill 3–5 tactical lessons, persisted to `logs/lessons_learned.json` (max 15, FIFO). On the next mission, adaptive prompt evolution injects accumulated lessons into the system prompt — so past mistakes become future instincts.
+
 ---
 
-## MCP Tools (18 total)
+## MCP Tools (19 total)
 
 **Core (12):**
 
@@ -327,7 +350,7 @@ flowchart TB
 | `advance_simulation` | Step the simulation forward |
 | `rescue_survivor` | Rescue a found survivor at the drone's position |
 
-**Innovation (6):**
+**Innovation (7):**
 
 | Tool | Description |
 |------|-------------|
@@ -337,6 +360,7 @@ flowchart TB
 | `deploy_as_relay` | Convert a drone into a stationary relay |
 | `get_network_resilience` | Mesh health metrics and coverage |
 | `coordinate_swarm` | Issue multi-drone coordinated orders |
+| `get_performance_score` | Current mission score breakdown (grade, component scores) |
 
 ---
 
@@ -357,11 +381,12 @@ drone-agents/
 │   └── state.py               # Shared model singleton (used by MCP + bridge)
 ├── mcp_server/
 │   ├── __init__.py
-│   └── server.py              # FastMCP server — 18 @mcp.tool() definitions
+│   └── server.py              # FastMCP server — 19 @mcp.tool() definitions
 ├── agent/
 │   ├── __init__.py
 │   ├── graph.py               # LangGraph StateGraph (MessagesState)
 │   ├── prompts.py             # System prompt with triage protocol
+│   ├── memory.py              # Post-mission lesson extraction and adaptive prompt builder
 │   └── runner.py              # Entry point: MCP client → agent loop
 ├── api/
 │   ├── __init__.py
@@ -383,7 +408,8 @@ drone-agents/
 │   ├── run_all.sh             # Start all 4 services
 │   └── demo.py                # Scripted 5-act demo sequence
 └── logs/
-    └── mission_log.json       # Persisted agent reasoning + tool calls
+    ├── mission_log.json       # Persisted agent reasoning + tool calls
+    └── lessons_learned.json   # Persisted tactical lessons from past missions
 ```
 
 ---
@@ -476,6 +502,8 @@ The demo pauses between acts for live narration. Open the dashboard at `http://l
 | POST | `/api/start` | Begin autonomous agent mission |
 | POST | `/api/step` | Manually advance simulation N steps |
 | POST | `/api/blackout` | Trigger blackout event `{zone_x, zone_y, radius}` |
+| GET | `/api/score` | Current mission score breakdown (grade, rescue/speed/coverage/efficiency/death penalty) |
+| GET | `/api/lessons` | Accumulated tactical lessons from past missions |
 
 ---
 
@@ -486,9 +514,9 @@ The Next.js dashboard provides 6 React components for real-time mission observat
 | Component | What It Shows |
 |-----------|--------------|
 | **GridMap** | 12x12 grid with terrain coloring, Bayesian heatmap overlay, pheromone visualization, drone markers with movement trails, survivor indicators, and scan pulse animations |
-| **DronePanel** | Battery level bars, drone status (active/returning/relay/autonomous), position, and survivor health bars for found survivors |
+| **DronePanel** | Battery level bars, drone status (active/returning/relay/autonomous), position, survivor health bars, mission score panel, and mission completion overlay |
 | **MeshGraph** | Force-directed SVG graph showing drone-to-drone communication links, relay nodes, and blackout zone overlay |
-| **ReasoningLog** | Color-coded scrolling log of the LLM's chain-of-thought reasoning, tool calls, and triage decisions. Critical entries trigger voice narration |
+| **ReasoningLog** | Color-coded scrolling log of the LLM's chain-of-thought reasoning, tool calls, and triage decisions. Pink [REFLECT] entries show mid-mission reflection checkpoints. Critical entries trigger voice narration |
 | **ControlPanel** | Start mission, trigger blackout, advance steps, toggle voice narration, reset simulation |
 | **TimelineSlider** | Scrub through recorded mission history step-by-step with live/replay mode toggle |
 
