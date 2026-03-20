@@ -99,7 +99,7 @@ Two-Tier Intelligence Flow:
 │   TIER 2: Drone Local Autonomy (Tactical)                           │
 │   ┌──────────────────────────────────────────────────────┐          │
 │   │  • During blackout: continue scanning assigned sector │          │
-│   │  • Auto-return when battery < 15%                     │          │
+│   │  • Auto-return when battery low (dynamic threshold)    │          │
 │   │  • Deposit & follow pheromone gradients               │          │
 │   │  • Avoid danger pheromone zones                       │          │
 │   │  • Attempt mesh relay to reconnect                    │          │
@@ -117,6 +117,8 @@ Two-Tier Intelligence Flow:
 project-root/
 ├── README.md
 ├── prd.md
+├── architecture.md
+├── plan.md
 ├── requirements.txt
 │
 ├── simulation/
@@ -152,6 +154,7 @@ project-root/
 │   │   ├── MeshGraph.tsx      # Network topology visualization
 │   │   ├── ReasoningLog.tsx   # Scrolling agent chain-of-thought log + voice narration
 │   │   ├── ControlPanel.tsx   # Trigger blackout, start/pause, step, voice toggle
+│   │   ├── RescueToast.tsx    # Animated toast notifications for rescue events with points breakdown
 │   │   └── TimelineSlider.tsx # Mission replay scrubber (rewind to any step)
 │   ├── lib/
 │   │   └── api.ts            # SSE client (EventSource) + REST fetch helpers
@@ -176,8 +179,8 @@ project-root/
 **Class: `DisasterModel(mesa.Model)`**
 
 - **Grid:** `mesa.spaces.MultiGrid(width=12, height=12, torus=False)`
-- **Survivors:** Configurable via `NUM_SURVIVORS` (default 8; demo uses 4), randomly placed, hidden from drones until scanned. Each survivor has `found`, `rescued`, `health`, and `severity` properties.
-- **Drones:** 4–5 `DroneAgent` instances, start at base position `(6, 5)`.
+- **Survivors:** Configurable via `NUM_SURVIVORS` (default 8; demo uses 5, spawned in 3 waves: 2 at init, 2 at step 6, 1 at step 11). Randomly placed in full mode; demo mode uses fixed strategic positions near building clusters. Hidden from drones until scanned. Each survivor has `found`, `rescued`, `health`, and `severity` properties. Initial health varies by severity: CRITICAL=0.40, MODERATE=0.70, STABLE=0.90.
+- **Drones:** 4–5 `DroneAgent` instances, start at base position `(6, 5)`. Battery starts at 100 (70 in demo mode).
 - **Terrain types:** Store as a separate grid — `BUILDING`, `ROAD`, `OPEN`, `WATER`, `DEBRIS`. Water and Debris cells are impassable (Debris can be created by aftershocks).
 
 #### Bayesian Heatmap (PropertyLayer)
@@ -213,9 +216,21 @@ Pheromone deposit rules:
 3. Drains survivor health based on severity level
 4. ~10% chance per step after step 8: **Aftershock event** — 2-3 random `OPEN` cells become `DEBRIS` (impassable).
 5. ~7% chance per step after step 12: **Rising water** — all `WATER` cells expand by 1 cell in a random direction. If water reaches a survivor, they are lost immediately.
-6. Record state snapshot for mission replay history
+6. **Disaster warnings:** Warnings are emitted 1 step before events fire (via `pending_disasters` array with `fire_at_step`), giving the agent and dashboard time to react.
+7. Record state snapshot for mission replay history
 
 **Disaster event log:** The model maintains a `disaster_events: list[dict]` recording all aftershocks and water expansions with step number, affected cells, and consequences (e.g., "Survivor at (7,3) lost to rising water").
+
+#### Scoring Engine
+
+The model includes a `compute_score()` method that grades mission performance:
+- **Rescue points:** CRITICAL=100, MODERATE=70, STABLE=50 base points per rescued survivor
+- **Health bonus:** `health_at_rescue × 50` (rewards fast rescues)
+- **Speed bonus:** +20 per survivor rescued before step `MAX_MISSION_STEPS / 2`
+- **Coverage bonus:** `min(200, coverage_pct × 2)`
+- **Efficiency bonus:** `remaining_battery / 10`
+- **Death penalty:** −30 per dead survivor
+- **Grade scale:** A (≥500), B (≥350), C (≥200), D (≥100), F (<100)
 
 ---
 
@@ -226,20 +241,20 @@ Pheromone deposit rules:
 Properties:
 - `drone_id: str` — unique identifier (e.g., "drone_alpha", "drone_bravo")
 - `position: tuple[int, int]` — current (x, y) on grid
-- `battery: int` — starts at 100, drains 1 per step, 2 per move, 3 per scan
+- `battery: int` — starts at 100 (70 in demo mode), drains 1 per step, 2 per move, 3 per scan
 - `status: str` — one of `"active"`, `"returning"`, `"charging"`, `"dead"`, `"relay"`
 - `connected: bool` — whether drone can communicate with command
 - `comm_range: int` — default 4 cells; drones within range of each other can relay
 - `findings_buffer: list[dict]` — stores scan results when disconnected
-- `scan_radius: int` — default 1 (scans current cell + adjacent)
+- `scan_radius: int` — default 2 (scans 5×5 area of 25 cells)
 - `assigned_sector: tuple[int, int, int, int] | None` — (x_min, y_min, x_max, y_max) assigned by commander
 - `is_relay: bool` — whether drone has been sacrificed as a communication relay (stationary)
 
 Methods:
-- `move_to(x, y)` — update position, drain battery by 2
-- `thermal_scan()` — check for survivors in scan_radius, return results, drain battery by 3
+- `move_to(x, y)` — update position, drain battery by 2. Enforces single-cell moves; multi-cell pathfinding is handled at the MCP layer via BFS.
+- `thermal_scan()` — check for survivors in scan_radius (5×5 area), return results, drain battery by 3
 - `return_to_base()` — set status to "returning", pathfind to (6,5)
-- `charge()` — if at base, increment battery by 10 per step (15 in demo mode) until 100
+- `charge()` — if at base, instantly restores battery to 100 (single step)
 - `rescue_survivor(survivor)` — mark a found survivor on the same cell as rescued
 - `deploy_as_relay()` — set `is_relay = True`, `status = "relay"`, drone becomes stationary comm node
 
@@ -248,11 +263,13 @@ Methods:
 These methods execute automatically during `model.step()` when the drone is **disconnected** (blackout) or has no pending commander orders:
 
 - `autonomous_step()` — master autonomy method called each step when disconnected:
-  1. **Low battery check:** If battery < 15%, auto-return to base regardless of other rules
-  2. **Sector scanning:** If `assigned_sector` is set, continue systematic scan of unscanned cells within sector
-  3. **Pheromone-guided movement:** Move toward highest `survivor_nearby` pheromone, away from `scanned` and `danger` pheromones. Decision formula: `score(cell) = survivor_nearby[cell] - 0.5 * scanned[cell] - 2.0 * danger[cell]`
-  4. **Mesh relay attempt:** If disconnected, move toward nearest connected drone (if known from last topology update) to attempt relay reconnection
-  5. **Buffer findings:** All scan results go to `findings_buffer` for later sync
+  1. **Low battery check:** If `battery < max(3 × manhattan_dist_to_base + 15, 35)`, auto-return to base regardless of other rules. The formula accounts for move cost (2) + passive drain (1) per cell, plus a 15-unit safety margin and a minimum floor of 35.
+  2. **Auto-rescue:** If a found, alive, unrescued survivor is at the drone's current cell, rescue it autonomously (logged as `[AUTONOMOUS]` rescue).
+  3. **Sector scanning:** If `assigned_sector` is set, continue systematic scan of unscanned cells within sector
+  4. **Pheromone-guided movement:** Move toward highest-scoring cell. Decision formula: `score(cell) = survivor_nearby - 1.5 × scanned - 2.0 × danger + 0.5 × heatmap`, plus `+0.3` sector preference bonus if the cell is within the drone's `assigned_sector`.
+  5. **Anti-oscillation:** Tracks `recent_positions` (last 6 positions) and `previous_pos`. Anti-backtrack penalty of −0.8 applied to the previous position; recency penalty of −0.1 × age for each recent position.
+  6. **Mesh relay attempt:** If disconnected, move toward nearest connected drone (if known from last topology update) to attempt relay reconnection
+  7. **Buffer findings:** All scan results go to `findings_buffer` for later sync
 
 - `deposit_pheromones()` — called after every scan or movement:
   - After scan: deposit `scanned` pheromone on scanned cells
@@ -266,16 +283,16 @@ Properties:
 - `position: tuple[int, int]`
 - `found: bool` — initially False
 - `rescued: bool` — initially False
-- `health: float` — starts at 1.0, drains per step based on severity
+- `health: float` — starts at severity-dependent value: CRITICAL=0.40, MODERATE=0.70, STABLE=0.90. Drains per step based on severity.
 - `severity: str` — one of `"CRITICAL"`, `"MODERATE"`, `"STABLE"`
 - `alive: bool` — True until health reaches 0.0
 
 Severity drain rates (per step):
-| Severity | Drain/Step | Steps Until Death | Urgency |
-|---|---|---|---|
-| CRITICAL | 0.05 | ~20 steps | Must rescue within minutes |
-| MODERATE | 0.02 | ~50 steps | Can wait, but not forever |
-| STABLE | 0.01 | ~100 steps | Low priority |
+| Severity | Initial Health | Drain/Step | Steps Until Death | Urgency |
+|---|---|---|---|---|
+| CRITICAL | 0.40 | 0.05 | ~8 steps | Must rescue immediately |
+| MODERATE | 0.70 | 0.02 | ~35 steps | Can wait, but not forever |
+| STABLE | 0.90 | 0.01 | ~90 steps | Low priority |
 
 Step logic:
 ```python
@@ -326,12 +343,13 @@ Each tool is a decorated function using `@mcp.tool()`:
 
 2. **`move_to(drone_id: str, x: int, y: int) -> dict`**
    - Moves specified drone to target coordinates
+   - For adjacent targets: single-cell move. For distant targets: uses 8-directional BFS pathfinding, executing waypoints step-by-step with async pacing (capped by battery budget: `max_steps = battery // 2`)
    - Returns: new position, battery after move, status
-   - Validates: target is within grid bounds, not a WATER or DEBRIS cell, drone has sufficient battery
+   - Validates: target is within grid bounds, not a WATER or DEBRIS cell, drone has sufficient battery, return-trip feasibility
    - Error if drone_id not found, drone is offline, or drone is in relay mode
 
 3. **`thermal_scan(drone_id: str) -> dict`**
-   - Scans current position + adjacent cells for heat signatures
+   - Scans a 5×5 area (radius 2) centered on the drone's position for heat signatures
    - Returns: list of detected survivors (position, signal_strength, severity, health), cells_scanned, battery_remaining
    - Updates Bayesian heatmap: positive hit increases adjacent cell probabilities, negative decreases
    - Deposits pheromones: `scanned` on all scanned cells, `survivor_nearby` if survivor found
@@ -374,7 +392,7 @@ Each tool is a decorated function using `@mcp.tool()`:
     - Returns: total survivors found, total survivors remaining, survivors lost (health=0), coverage percentage (cells scanned / total), drone fleet status, mission elapsed steps, mesh network topology, disaster events count
 
 11. **`advance_simulation(steps: int = 1) -> dict`**
-    - Advances the Mesa model by N steps (battery drain, charging, movement, health decay, pheromone decay, possible aftershock/water events)
+    - Advances the Mesa model by exactly 1 step always (the `steps` parameter is accepted but ignored; call multiple times for multi-step advance). Each step processes: battery drain, charging, movement, health decay, pheromone decay, possible aftershock/water events.
     - Returns: updated fleet status, any drones that hit 0 battery, any disaster events that occurred, any survivors that died
 
 12. **`rescue_survivor(drone_id: str, survivor_id: int) -> dict`**
@@ -425,6 +443,14 @@ Each tool is a decorated function using `@mcp.tool()`:
     - Data: total score, letter grade (A–F), rescue_points, speed_bonus, coverage_bonus, death_penalty, efficiency_bonus, mission_step, mission_progress_pct, steps_remaining
     - Grade scale: A(>=500), B(>=350), C(>=200), D(>=100), F(<100)
     - Agent should call this mid-mission to evaluate and adapt strategy
+
+#### Tool Guards
+
+All tools that target a specific drone enforce common safety checks:
+- **Connectivity:** Most tools require `drone.connected == True` (exceptions: local actions like rescue at co-located position)
+- **Availability:** `_check_drone_available()` blocks commands to drones that are charging or returning to base
+- **Battery feasibility:** `move_to` and `thermal_scan` check whether the drone has enough battery for the action plus a return trip to base
+- **Terrain validation:** `move_to` verifies the target cell is passable (not WATER or DEBRIS)
 
 ---
 
@@ -486,8 +512,17 @@ The disaster zone is ALIVE. Watch for:
 Mission succeeds when all LIVING survivors are located. Minimize steps, battery usage, and survivor casualties. Every death is a failure — but strategic triage means accepting some losses to save many.
 """
 
-# A separate DEMO_SYSTEM_PROMPT also exists — a condensed version optimized for demo mode
-# with explicit instructions to keep operating for 13+ steps to handle all scripted events.
+# DEMO_SYSTEM_PROMPT — A condensed, action-oriented prompt for demo mode that includes:
+# - Starting battery: 70% (NOT 100%)
+# - Mission: find and rescue ALL 5 survivors within 15 steps
+# - Wave schedule: Wave 1 (init) = 2 survivors, Wave 2 (~step 6) = 2 survivors, Wave 3 (~step 11) = 1 survivor
+# - Three phases: Early Rescue (steps 0-5), Mid Events (steps 6-10), Final Rescue (steps 11-14)
+# - Scripted disaster timeline: aftershock ~step 2, blackout ~step 4, rising water ~step 7, aftershock ~step 10
+# - Building cluster scan positions: SW (3,3), SE (9,2), NW (3,9), NE (9,9)
+# - IRON RULES: Prohibits info-only tool calls (get_mission_summary, get_priority_map, assess_survivor,
+#   get_disaster_events, get_network_resilience, get_performance_score) until all 5 survivors rescued.
+# - Only allowed action tools: move_to, thermal_scan, rescue_survivor, advance_simulation,
+#   coordinate_swarm (step 0 only), discover_drones (step 0 only), get_battery_status, sync_findings, deploy_as_relay
 ```
 
 #### Adaptive Prompt Evolution
@@ -518,11 +553,18 @@ Edges:
   - "nudge" -> "agent" (loop back to re-prompt the agent)
 ```
 
-Mid-mission reflection: Every `REFLECTION_INTERVAL = 5` steps, the tools node injects a
+Mid-mission reflection: Every `REFLECTION_INTERVAL` steps, the tools node injects a
 `SystemMessage` with the current `compute_score()` breakdown, prompting the agent to reflect
 on what is working, what should change, and whether it is prioritizing correctly.
+`REFLECTION_INTERVAL` = 8 for demo mode (max_steps ≤ 20), 5 for full missions.
 
-Message windowing: controlled by `MSG_WINDOW_SIZE` env var (0 = disabled). When enabled, trims older messages while preserving tool call/result pairs.
+Message windowing: controlled by `MSG_WINDOW_SIZE` env var (default 40; 0 = disabled). When enabled, trims older messages while preserving tool call/result pairs.
+
+Additional graph behaviors:
+- **Auto-advance:** If the agent's tool batch includes action tools (move_to, thermal_scan, rescue_survivor) but omits `advance_simulation`, the graph auto-injects one simulation step to prevent the world from stalling.
+- **Info-loop detection:** Tracks consecutive info-only tool rounds. Warns after 2 consecutive info-only rounds (`INFO_WARN_THRESHOLD`); ends mission after 3 (`MAX_INFO_LOOPS`) unless survivors still need help (allows up to 2 resets).
+- **Parallel tool execution:** Tool calls are grouped by `drone_id`; drone groups execute in parallel via `asyncio.gather()`. Global tools (no drone_id) execute sequentially after all drone groups.
+- **Situational context injection:** Before each agent turn, the tools node injects a `SystemMessage` summarizing: active blackout zones, disconnected drones, buffered findings count, rescue urgency (unrescued survivors with steps-to-death and nearest drone), battery status of charging/returning drones, and unscanned cluster scan directives.
 
 Use `langchain-mcp-adapters` `MultiServerMCPClient` to load tools from the MCP server:
 
@@ -591,6 +633,7 @@ Serves current simulation state to the frontend dashboard. **Primary transport i
   |---|---|---|
   | `state` | Full simulation state (drones, terrain, heatmap, pheromones) | Grid + panel updates |
   | `logs` | New agent reasoning entries | Reasoning log + voice narration |
+  | `warning` | Upcoming disaster warning (1 step before event) | Warning banners on dashboard |
   | `disaster` | Aftershock/water/death events | Alert flashes + terrain updates |
   | `blackout` | Blackout zone info | Red flash overlay on dashboard |
   | `mission_complete` | Final stats + completion data | Mission end notification |
@@ -667,6 +710,8 @@ Serves current simulation state to the frontend dashboard. **Primary transport i
 - `GET /api/score` — returns current mission score breakdown (total, grade, rescue_points, speed_bonus, coverage_bonus, death_penalty, efficiency_bonus)
 - `GET /api/lessons` — returns accumulated tactical lessons from past missions
 
+**CORS:** Allows `http://localhost:3000` and `http://127.0.0.1:3000` only (all methods, credentials enabled).
+
 **Run:** `uvicorn api.bridge:app --port 8001`
 
 ---
@@ -675,26 +720,32 @@ Serves current simulation state to the frontend dashboard. **Primary transport i
 
 ### Main Page Layout (`app/page.tsx`)
 
-4-panel layout using CSS Grid + timeline slider at bottom:
+3-column grid layout + timeline slider at bottom:
 
 ```
-┌──────────────────────────────────┬──────────────────┐
-│                                  │   Drone Panel    │
-│      Grid Map + Heatmap          │   (battery bars, │
-│      (main visualization)        │    status, pos,  │
-│      CSS transitions on moves    │    survivor HP)  │
-│      Scan pulse animations       │                  │
-├──────────────────────────────────┼──────────────────┤
-│    Agent Reasoning Log           │  Control Panel   │
-│    (scrolling text log)          │  (buttons/toggles│
-│    + Voice narration indicator   │   blackout, step,│
-│                                  │   voice on/off)  │
-├──────────────────────────────────┴──────────────────┤
-│           Timeline Slider (Mission Replay)           │
-│   |◄──●─────────────────────────────────────────►|   │
-│   Step 0              Step 12              Step 24   │
-└──────────────────────────────────────────────────────┘
+┌─────────────────────┬─────────────────────┬──────────────┐
+│                     │                     │  Tabbed      │
+│   Grid Map          │   Reasoning Log     │  Sidebar     │
+│   + Heatmap         │   (scrolling CoT)   │  [Fleet|Mesh]│
+│   + Pheromone       │   + Voice narration  │  + Drone     │
+│   + Drone trails    │     indicator        │    status    │
+│   + Rescue bursts   │                     │  + Score     │
+│   + Warning banners │                     │  + Controls  │
+│   + Distress signals│                     │              │
+├─────────────────────┴─────────────────────┴──────────────┤
+│           Timeline Slider (Mission Replay)                │
+│   |◄──●─────────────────────────────────────────►|       │
+│   Step 0              Step 7              Step 14        │
+└──────────────────────────────────────────────────────────┘
 ```
+
+Additional UI features:
+- **RescueToast.tsx:** Animated toast notifications (top-left stack) showing survivor ID, severity icon, points breakdown (base + health bonus), and health bar at rescue time
+- **Mission complete modal:** Full-screen overlay with letter grade, score breakdown (rescue/speed/coverage/efficiency/deaths), stats grid (rescued/alive/steps), animated lessons learned, and mission history bar chart
+- **Gamification:** Live score counter and lives-saved counter with pop animations, rescue streak tracking, rescue burst particle effects on the grid at rescue coordinates
+- **Distress signals:** Pulsing icons on newly found survivors (4-second fade)
+- **Warning banners:** Animated slide-in/slide-out banners for upcoming disaster warnings (auto-dismiss after ~6s)
+- **Drone trail lines:** Smooth CSS-transitioned drone position markers with color-coded per-drone movement
 
 ### Data Connection: SSE (`lib/api.ts`)
 
@@ -879,7 +930,7 @@ The heatmap is a core intelligence layer. Here's the update logic:
 ```python
 def update_heatmap(model, scan_position: tuple, found_survivors: list[tuple]):
     x, y = scan_position
-    scan_radius = 1  # cells around scan position
+    scan_radius = 2  # cells around scan position (5x5 area)
 
     if found_survivors:
         for dx in range(-scan_radius, scan_radius + 1):
@@ -929,9 +980,13 @@ def autonomous_navigation(self):
     for nx, ny in self.get_neighbors():
         score = (
             self.model.pheromone_survivor_nearby[ny][nx] * 1.0   # attracted to survivor signals
-            - self.model.pheromone_scanned[ny][nx] * 0.5          # repelled by already-scanned
+            - self.model.pheromone_scanned[ny][nx] * 1.5          # repelled by already-scanned
             - self.model.pheromone_danger[ny][nx] * 2.0           # strongly repelled by danger
+            + self.model.heatmap[ny][nx] * 0.5                    # attracted to high-probability cells
         )
+        # Sector preference: +0.3 if cell is within assigned_sector
+        # Anti-backtrack penalty: -0.8 if cell is the previous position
+        # Recency penalty: -0.1 * age for each position in recent_positions (last 6)
         if score > best_score:
             best_score = score
             best_cell = (nx, ny)
@@ -1011,6 +1066,8 @@ def simulate_mission(drone_id, target_x, target_y):
 
 Use this scripted sequence for the live demo. The demo is designed as a **dramatic narrative arc** with clear "wow moments" for judges.
 
+> **Note:** Demo mode runs 15 steps (not the 40-step narrative below). Survivors spawn in waves: 2 at init, 2 at step 6, 1 at step 11. The acts below describe the conceptual flow — actual step numbers compress to fit the 15-step window.
+
 ### Act 1: Discovery (Steps 1-5)
 1. **Opening** — Show the empty 12x12 grid. "A Category 5 typhoon has struck Manila. All cell towers are down. Survivors are trapped and their conditions are deteriorating every second."
 2. **Agent discovers fleet** — Watch `discover_drones()` reveal 4 drones at base. Agent reasons about initial strategy using the heatmap.
@@ -1072,7 +1129,7 @@ Use this scripted sequence for the live demo. The demo is designed as a **dramat
 
 7. **Mission Replay Timeline** — Judges can rewind to any step and review any decision. No other team will have this. It turns a live demo into an explorable experience.
 
-8. **RL-Inspired Adaptive Learning** — The agent gets smarter across missions. A scoring engine grades performance (A–F), mid-mission reflection checkpoints force strategy adaptation, and post-mission lesson extraction persists tactical knowledge for prompt evolution. No other team will have cross-mission learning.
+8. **RL-Inspired Adaptive Learning** — The agent gets smarter across missions. `compute_score()` grades performance A–F with detailed breakdowns (rescue points, speed/coverage/efficiency bonuses, death penalties). Mid-mission reflection checkpoints every 5–8 steps inject score data and prompt the agent to adapt strategy. Post-mission, the LLM (temperature=0.3) extracts 3–5 tactical lessons with priority ratings from mission stats and persists them to `logs/lessons_learned.json`. On subsequent missions, `build_adaptive_prompt()` injects these lessons into the system prompt as an "Adaptive Intelligence — Mission #N" section, creating genuine cross-mission learning and prompt evolution.
 
 ### Baseline Differentiators (from original PRD)
 
@@ -1089,6 +1146,8 @@ Use this scripted sequence for the live demo. The demo is designed as a **dramat
 ---
 
 ## 3-Day Implementation Schedule
+
+> **Status: All 6 implementation stages complete.** The schedule below is historical — it documents the original plan. See `plan.md` for the actual stage-by-stage implementation record.
 
 ### Day 1: Backend Foundation (Simulation + MCP + Agent)
 
@@ -1158,11 +1217,12 @@ NUM_DRONES=4
 NUM_SURVIVORS=8
 MAX_MISSION_STEPS=50
 LLM_MODEL=gpt-5-mini
+LLM_MAX_TOKENS=16384
 DEMO_MODE=0
-MSG_WINDOW_SIZE=0
+MSG_WINDOW_SIZE=40
 ```
 
-**Demo mode defaults:** When `DEMO_MODE=1`, the system uses `NUM_SURVIVORS=4`, `MAX_MISSION_STEPS=20`, `MSG_WINDOW_SIZE=20`, and places survivors at strategic positions near building clusters.
+**Demo mode defaults:** When `DEMO_MODE=1`, the system uses `NUM_SURVIVORS=5` (spawned in 3 waves), `MAX_MISSION_STEPS=15`, `MSG_WINDOW_SIZE=40`, starting battery of 70, and places survivors at strategic positions near building clusters.
 
 ---
 
@@ -1188,7 +1248,7 @@ MSG_WINDOW_SIZE=0
 - [ ] Voice narration reads critical agent decisions aloud via SpeechSynthesis (Voice Narration)
 - [ ] Timeline slider enables judges to rewind and replay any step of the mission (Mission Replay)
 - [ ] All 19 MCP tools are functional (12 core + 7 innovation)
-- [ ] Agent receives performance score checkpoints every 5 steps and reflects on strategy (Adaptive Learning)
+- [ ] Agent receives performance score checkpoints every 5–8 steps and reflects on strategy (Adaptive Learning)
 - [ ] Post-mission lessons are extracted and persisted to lessons_learned.json (Adaptive Learning)
 - [ ] Past lessons are injected into next mission's system prompt (Adaptive Learning)
 - [ ] Demo script produces at least 5 distinct "wow moments" for judges

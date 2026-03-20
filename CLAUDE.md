@@ -15,7 +15,7 @@ Self-healing rescue drone swarm simulation for a hackathon (Agentic AI track). A
 | Agent Brain | LangChain + LangGraph + `langchain-mcp-adapters` | — |
 | LLM | OpenAI GPT-5 mini (`gpt-5-mini`) via `langchain-openai` | — |
 | API Bridge | FastAPI (SSE streaming + REST) | `localhost:8001` |
-| Frontend | Next.js 14+ (App Router) + React + TypeScript + Tailwind | `localhost:3000` |
+| Frontend | Next.js 16+ (App Router) + React + TypeScript + Tailwind | `localhost:3000` |
 
 ## Architecture
 
@@ -53,15 +53,18 @@ project-root/
 │   ├── __init__.py
 │   ├── model.py          # DisasterModel (grid, terrain, heatmap, pheromones, disasters)
 │   ├── agents.py         # DroneAgent (local autonomy), SurvivorAgent (health decay)
-│   └── mesh_network.py   # Mesh topology, blackout, relay, resilience analysis
+│   ├── mesh_network.py   # Mesh topology, blackout, relay, resilience analysis
+│   └── state.py          # Simulation state snapshot & serialization helpers
 ├── mcp_server/
 │   ├── __init__.py
-│   └── server.py         # FastMCP server — 18 @mcp.tool() definitions
+│   └── server.py         # FastMCP server — 19 @mcp.tool() definitions
 ├── agent/
 │   ├── __init__.py
 │   ├── graph.py          # LangGraph StateGraph (MessagesState)
+│   ├── memory.py         # Cross-mission memory — lessons learned persistence
 │   ├── prompts.py        # System prompt with triage protocol
-│   └── runner.py         # Entry point: MCP client → agent loop
+│   ├── runner.py         # Entry point: MCP client → agent loop
+│   └── shared.py         # Shared state & config across agent modules
 ├── api/
 │   ├── __init__.py
 │   └── bridge.py         # FastAPI: SSE /api/stream, REST /api/state, /api/logs, /api/history
@@ -75,14 +78,16 @@ project-root/
 │   │   ├── MeshGraph.tsx      # SVG network topology
 │   │   ├── ReasoningLog.tsx   # Color-coded CoT log + SpeechSynthesis voice narration
 │   │   ├── ControlPanel.tsx   # Start, blackout, step, voice toggle, reset
-│   │   └── TimelineSlider.tsx # Mission replay scrubber (rewind to any step)
+│   │   ├── TimelineSlider.tsx # Mission replay scrubber (rewind to any step)
+│   │   └── RescueToast.tsx    # Toast notifications for rescue events
 │   └── lib/
 │       └── api.ts             # SSE client (EventSource) + REST fetch helpers
 ├── scripts/
 │   ├── run_all.sh
 │   └── demo.py
 └── logs/
-    └── mission_log.json
+    ├── mission_log.json
+    └── lessons_learned.json
 ```
 
 ## Running the Project
@@ -91,7 +96,7 @@ project-root/
 
 ```bash
 # Python (from project root)
-pip install "mcp[cli]" mesa langchain-mcp-adapters langgraph langchain-openai langchain fastapi uvicorn numpy
+pip install "mcp[cli]" mesa langchain-mcp-adapters langgraph langchain-openai langchain fastapi uvicorn numpy python-dotenv
 
 # Frontend (from project root)
 cd dashboard
@@ -129,6 +134,10 @@ GRID_HEIGHT=12
 NUM_DRONES=4
 NUM_SURVIVORS=8
 MAX_MISSION_STEPS=50
+DEMO_MODE=true
+LLM_MODEL=gpt-5-mini
+MSG_WINDOW_SIZE=20
+LLM_MAX_TOKENS=4096
 ```
 
 ## Key Design Patterns
@@ -164,11 +173,11 @@ When multiple survivors found, agent reasons through priority:
 
 Survivor health drain: CRITICAL=0.05/step (~20 steps), MODERATE=0.02/step (~50), STABLE=0.01/step (~100).
 
-## MCP Tools (18 total)
+## MCP Tools (19 total)
 
 **Core (12):** `discover_drones`, `move_to`, `thermal_scan`, `get_battery_status`, `get_priority_map`, `simulate_mission`, `sync_findings`, `trigger_blackout`, `recall_drone`, `get_mission_summary`, `advance_simulation`, `rescue_survivor`
 
-**Innovation (6):** `get_pheromone_map`, `get_disaster_events`, `assess_survivor`, `deploy_as_relay`, `get_network_resilience`, `coordinate_swarm`
+**Innovation (7):** `get_pheromone_map`, `get_disaster_events`, `assess_survivor`, `deploy_as_relay`, `get_network_resilience`, `coordinate_swarm`, `get_performance_score`
 
 ## API Endpoints
 
@@ -183,6 +192,8 @@ Survivor health drain: CRITICAL=0.05/step (~20 steps), MODERATE=0.02/step (~50),
 | POST | `/api/step` | Manually advance simulation N steps |
 | POST | `/api/blackout` | Trigger blackout event `{zone_x, zone_y, radius}` |
 | GET | `/api/health` | Health check with mission status |
+| GET | `/api/score` | RL-inspired performance score for current mission |
+| GET | `/api/lessons` | Cross-mission lessons learned |
 | POST | `/api/reset` | Reset simulation to fresh state |
 
 ## Development Notes
