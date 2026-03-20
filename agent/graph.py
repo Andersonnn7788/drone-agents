@@ -84,7 +84,23 @@ def _summarize_tool_result(tool_name: str, raw_content_blocks: list) -> str | No
 
         if tool_name == "advance_simulation":
             text = "\n".join(parts)
-            return f"Step result: {text[:200]}"
+            base = f"Step result: {text[:300]}"
+            # Extract survivor_detected events so they're never truncated
+            import json as _json
+            try:
+                data = _json.loads(text)
+                if isinstance(data, dict):
+                    disasters = data.get("recent_disasters", [])
+                    survivor_alerts = [
+                        f"NEW SURVIVOR at ({e['position'][0]},{e['position'][1]}) severity={e.get('severity','?')}"
+                        for e in disasters
+                        if e.get("type") == "survivor_detected" and e.get("position")
+                    ]
+                    if survivor_alerts:
+                        base += " | " + "; ".join(survivor_alerts)
+            except (ValueError, TypeError, KeyError):
+                pass
+            return base
 
         if tool_name == "simulate_mission":
             text = "\n".join(parts)
@@ -213,12 +229,25 @@ def _emit_narrative(tool_name: str, raw_content_blocks: list) -> bool:
                         break
                 except (ValueError, TypeError):
                     pass
+            # Fallback: extract error from non-JSON text (e.g. MCP exception strings)
+            if not succeeded and not reason:
+                for p in parts:
+                    if "error" in p.lower() or "failed" in p.lower():
+                        reason = p[:120].strip()
+                        break
             if succeeded:
-                _log_to_model(
-                    "Survivor rescued successfully.",
-                    msg_type="triage",
-                    is_critical=True,
-                )
+                if data.get("already_rescued"):
+                    _log_to_model(
+                        "Survivor confirmed safe — already rescued.",
+                        msg_type="narrative",
+                        is_critical=False,
+                    )
+                else:
+                    _log_to_model(
+                        "Survivor rescued successfully.",
+                        msg_type="triage",
+                        is_critical=True,
+                    )
             else:
                 _log_to_model(
                     f"Rescue failed — {reason or 'unknown error'}.",
@@ -276,11 +305,40 @@ def _emit_narrative(tool_name: str, raw_content_blocks: list) -> bool:
             # Disconnection errors — don't narrate (too noisy during blackout)
             if "disconnected" in text or "blackout" in text:
                 return True
-            if "false" in text or "fail" in text or "blocked" in text or "cannot" in text:
-                # Extract reason if available
-                reason = full[:150].strip()
+            # Charging/returning drone rejections — narrate cleanly
+            if "charging" in text and "error" in text:
                 _log_to_model(
-                    f"Movement blocked — {reason}.",
+                    "Command rejected — drone is charging at base. Wait for full recharge.",
+                    msg_type="narrative",
+                    is_critical=False,
+                )
+                return True
+            if "returning" in text and "error" in text:
+                _log_to_model(
+                    "Command rejected — drone is returning to base for recharge.",
+                    msg_type="narrative",
+                    is_critical=False,
+                )
+                return True
+            if "false" in text or "fail" in text or "blocked" in text or "cannot" in text:
+                # Parse JSON to extract clean reason and position
+                import json as _json
+                reason = "unknown obstacle"
+                position = ""
+                for p in parts:
+                    try:
+                        data = _json.loads(p)
+                        if isinstance(data, dict):
+                            if data.get("reason"):
+                                reason = data["reason"]
+                            pos = data.get("final_position") or data.get("position")
+                            if pos:
+                                position = f" at ({pos[0]},{pos[1]})"
+                            break
+                    except (ValueError, TypeError):
+                        pass
+                _log_to_model(
+                    f"Movement blocked{position} — {reason}.",
                     msg_type="narrative",
                     is_critical=True,
                 )
@@ -324,7 +382,7 @@ def _emit_narrative(tool_name: str, raw_content_blocks: list) -> bool:
             drone_match = _re.search(r"drone[_\s]?(\w+)", text)
             drone_id = drone_match.group(1) if drone_match else "?"
             _log_to_model(
-                f"Drone {drone_id} recalled to base — RTB engaged.",
+                f"Drone {drone_id} recalled to base — Return-To-Base engaged.",
                 msg_type="narrative",
                 is_critical=True,
             )
@@ -375,7 +433,7 @@ def _emit_narrative(tool_name: str, raw_content_blocks: list) -> bool:
         if tool_name == "get_battery_status":
             # Only narrate when low batteries detected
             import re as _re
-            batteries = _re.findall(r"(\d+)%?", full)
+            batteries = _re.findall(r'"battery":\s*(\d+)', full)
             low = [int(b) for b in batteries if int(b) < 20 and int(b) > 0]
             if low:
                 _log_to_model(
@@ -533,27 +591,122 @@ def _build_rescue_urgency_context(model) -> str | None:
     # Sort by urgency (fewest steps to death first)
     unrescued.sort(key=lambda x: x["steps_to_death"])
 
-    # Find nearest connected drone for each survivor
+    # Find best connected drone for each survivor (battery-aware)
     connected_drones = [
         d for d in model.drones.values()
         if d.connected and d.status == "active"
     ]
 
+    base_pos = (6, 5)
+
     lines = ["RESCUE URGENCY — found survivors bleeding out:"]
     for s in unrescued:
-        nearest = "none"
+        drone_info = "none available"
         if connected_drones:
-            def dist(d):
-                return abs(d.pos[0] - s["pos"][0]) + abs(d.pos[1] - s["pos"][1])
-            best = min(connected_drones, key=dist)
-            nearest = f"{best.drone_id} at ({best.pos[0]},{best.pos[1]}), {dist(best)} steps away"
+            candidates = []
+            for d in connected_drones:
+                dist_to_surv = abs(d.pos[0] - s["pos"][0]) + abs(d.pos[1] - s["pos"][1])
+                move_cost = 3 * dist_to_surv  # 2 move + 1 passive per cell
+                battery_after = d.battery - move_cost
+                return_dist = abs(s["pos"][0] - base_pos[0]) + abs(s["pos"][1] - base_pos[1])
+                return_cost = 3 * return_dist
+                can_rtb = (battery_after - return_cost) >= 0
+                candidates.append({
+                    "drone": d, "dist": dist_to_surv,
+                    "battery_after": battery_after, "can_rtb": can_rtb,
+                })
+            # Sort: can_rtb True first, then by distance
+            candidates.sort(key=lambda c: (not c["can_rtb"], c["dist"]))
+            best = candidates[0]
+            bd = best["drone"]
+            drone_info = (
+                f"BEST: {bd.drone_id} ({bd.battery}%, {best['dist']} cells"
+                f"{', can Return-To-Base' if best['can_rtb'] else ', CANNOT Return-To-Base'})"
+            )
+            # Warn if nearest by distance is not the recommended drone
+            nearest_by_dist = min(candidates, key=lambda c: c["dist"])
+            nd = nearest_by_dist["drone"]
+            if nd.drone_id != bd.drone_id:
+                drone_info += (
+                    f" | {nd.drone_id} closer ({nearest_by_dist['dist']} cells) "
+                    f"but {nd.battery}% — cannot Return-To-Base"
+                )
         lines.append(
             f"  - {s['id']} at ({s['pos'][0]},{s['pos'][1]}): {s['severity']}, "
             f"health={s['health']}%, ~{s['steps_to_death']} steps to death, "
-            f"nearest drone: {nearest}"
+            f"{drone_info}"
         )
     lines.append("ACTION REQUIRED: move_to → rescue_survivor for each. Do NOT call info tools.")
     return "\n".join(lines)
+
+
+# Base station position (must match simulation)
+_BASE_POS = (6, 5)
+
+
+def _build_battery_context(model) -> str | None:
+    """Battery check: auto-recall critically low drones and build context for LLM.
+
+    Returns a context string listing charging/returning drones (so LLM knows
+    which drones are unavailable), or None if all drones are available.
+    """
+    unavailable_lines = []
+
+    for d in model.drones.values():
+        if d.status == "dead" or not d.connected:
+            continue
+
+        # Report charging drones to LLM
+        if d.status == "charging":
+            unavailable_lines.append(
+                f"  - {d.drone_id}: CHARGING at base ({d.battery}%), "
+                f"will be ready next step. Do NOT command."
+            )
+            continue
+
+        # Report returning drones to LLM
+        if d.status == "returning":
+            dist = abs(d.pos[0] - _BASE_POS[0]) + abs(d.pos[1] - _BASE_POS[1])
+            _log_to_model(
+                f"Battery low — {d.drone_id} returning to base at {d.battery}%, "
+                f"{dist} cells away.",
+                msg_type="narrative",
+                is_critical=(d.battery < 20),
+            )
+            unavailable_lines.append(
+                f"  - {d.drone_id}: RETURNING to base ({d.battery}%), "
+                f"{dist} cells away. Do NOT command."
+            )
+            continue
+
+        if d.status != "active":
+            continue
+
+        dist = abs(d.pos[0] - _BASE_POS[0]) + abs(d.pos[1] - _BASE_POS[1])
+        return_cost = 3 * dist  # 2/move + 1/passive per cell
+        safe_battery = return_cost + 15  # match agents.py margin
+
+        if d.battery < safe_battery:
+            # Force recall — don't rely on LLM to act
+            d.return_to_base()
+            _log_to_model(
+                f"Battery critical — {d.drone_id} at {d.battery}%, "
+                f"{dist} cells from base. AUTO-RECALLED to base.",
+                msg_type="narrative",
+                is_critical=True,
+            )
+            unavailable_lines.append(
+                f"  - {d.drone_id}: AUTO-RECALLED ({d.battery}%), "
+                f"{dist} cells from base. Do NOT command."
+            )
+
+    if unavailable_lines:
+        return (
+            "BATTERY STATUS — unavailable drones (commands will be rejected):\n"
+            + "\n".join(unavailable_lines)
+            + "\nOnly command drones with status='active'."
+        )
+    return None
 
 
 def _get_unscanned_clusters(model) -> dict:
@@ -582,6 +735,19 @@ def _log_to_model(message: str, msg_type: str = "system", is_critical: bool = Fa
         "is_critical": is_critical,
         "type": msg_type,
     })
+
+
+def _format_disaster_desc(events: list) -> str:
+    """Format disaster events for LLM context, enriching survivor_detected with position/severity."""
+    parts = []
+    for e in events:
+        if e.get("type") == "survivor_detected" and e.get("position"):
+            pos = e["position"]
+            sev = e.get("severity", "UNKNOWN")
+            parts.append(f"NEW SURVIVOR at ({pos[0]},{pos[1]}) severity={sev} — deploy nearest drone!")
+        else:
+            parts.append(f"{e['type']} at step {e.get('step', '?')}")
+    return "; ".join(parts)
 
 
 def _check_new_disasters(prev_count: int) -> list:
@@ -627,6 +793,16 @@ def _check_new_disasters(prev_count: int) -> list:
             else:
                 msg = "✓ Blackout cleared — all drones reconnected. No buffered findings."
             _log_to_model(msg, msg_type="narrative", is_critical=True)
+        elif etype == "survivor_detected":
+            pos = event.get("position", [0, 0])
+            sev = event.get("severity", "UNKNOWN")
+            _log_to_model(
+                f"🆘 NEW SURVIVOR SIGNAL: {sev} survivor detected near ({pos[0]},{pos[1]})! Deploy nearest drone!",
+                msg_type="narrative",
+                is_critical=True,
+            )
+    # Track how far we've narrated
+    model._narrated_disaster_count = len(model.disaster_events)
     return new_events
 
 
@@ -685,8 +861,8 @@ def build_graph(tools: list):
     # Demo mode flag
     demo_mode = os.environ.get("DEMO_MODE", "0") == "1"
 
-    # Minimum steps in demo mode — must run past all scripted events (last at step 7)
-    MIN_DEMO_STEPS = 8
+    # Minimum steps in demo mode — must run past all scripted events (last wave at step 11)
+    MIN_DEMO_STEPS = 14
 
     # Select prompt with adaptive intelligence
     if demo_mode:
@@ -738,6 +914,10 @@ def build_graph(tools: list):
             "WARNING: You have been",
             "RESCUE URGENCY",
             "ACTIVE BLACKOUT ZONES:",
+            "BATTERY STATUS",
+            "BATTERY CRITICAL:",
+            "BATTERY CAUTION:",
+            "BATTERY OK:",
         )
         messages = [
             m for i, m in enumerate(messages)
@@ -768,6 +948,11 @@ def build_graph(tools: list):
         urgency = _build_rescue_urgency_context(model)
         if urgency:
             messages.append(SystemMessage(content=urgency))
+
+        # Battery check: auto-recall critically low drones + inform LLM
+        battery_ctx = _build_battery_context(model)
+        if battery_ctx:
+            messages.append(SystemMessage(content=battery_ctx))
 
         response = llm_with_tools.invoke(messages)
 
@@ -859,16 +1044,7 @@ def build_graph(tools: list):
                 msg, raw_content, pre_d, pre_w = await _execute_one(tc)
                 # Pace single-step move_to so SSE can broadcast positions
                 if tc["name"] == "move_to":
-                    is_multistep = False
-                    try:
-                        import json as _json
-                        parsed = _json.loads(raw_content) if isinstance(raw_content, str) else raw_content
-                        if isinstance(parsed, dict) and len(parsed.get("path", [])) > 1:
-                            is_multistep = True
-                    except (ValueError, TypeError):
-                        pass
-                    if not is_multistep:
-                        await asyncio.sleep(0.20)
+                    await asyncio.sleep(0.35)
                 group_results.append((idx, tc, msg, raw_content, pre_d, pre_w))
             return group_results
 
@@ -899,9 +1075,12 @@ def build_graph(tools: list):
         all_results.sort(key=lambda x: x[0])
 
         # --- Post-process results: logging, narrative, disaster detection ---
-        results = []
+        # Split into tool messages and system messages to avoid OpenAI 400 error
+        # (SystemMessage interleaved between ToolMessages violates API contract)
+        tool_messages = []
+        system_messages = []
         for idx, tc, msg, raw_content, pre_disaster, pre_warning in all_results:
-            results.append(msg)
+            tool_messages.append(msg)
 
             raw_blocks = raw_content if isinstance(raw_content, list) else [raw_content]
 
@@ -919,13 +1098,36 @@ def build_graph(tools: list):
                     msg_type="result",
                 )
 
+            # Post-move battery safety net: force-recall if battery critically low
+            if msg.name == "move_to":
+                import json as _json
+                try:
+                    move_data = _json.loads(raw_content if isinstance(raw_content, str) else str(raw_content))
+                    if isinstance(move_data, dict):
+                        batt = move_data.get("battery")
+                        drone_id = tc.get("args", {}).get("drone_id", "?")
+                        if batt is not None and batt < 25:
+                            sim_model = get_model()
+                            drone_obj = sim_model.drones.get(drone_id)
+                            if drone_obj:
+                                dist = abs(drone_obj.pos[0] - 6) + abs(drone_obj.pos[1] - 5)
+                                return_cost = 3 * dist
+                                if batt < return_cost + 5:
+                                    # Force-recall the drone, not just warn
+                                    if drone_obj.status == "active":
+                                        drone_obj.return_to_base()
+                                    system_messages.append(SystemMessage(content=(
+                                        f"BATTERY CRITICAL: {drone_id} at {batt}% after move, "
+                                        f"{dist} cells from base. AUTO-RECALLED — do NOT command it."
+                                    )))
+                except (ValueError, TypeError, KeyError):
+                    pass
+
             if pre_disaster is not None:
                 new_disasters = _check_new_disasters(pre_disaster)
                 if new_disasters:
-                    disaster_desc = "; ".join(
-                        f"{e['type']} at step {e.get('step', '?')}" for e in new_disasters
-                    )
-                    results.append(SystemMessage(content=(
+                    disaster_desc = _format_disaster_desc(new_disasters)
+                    system_messages.append(SystemMessage(content=(
                         f"⚠ DISASTER ALERT: {disaster_desc}. "
                         "Check affected areas, reroute drones if needed, and report status."
                     )))
@@ -940,7 +1142,7 @@ def build_graph(tools: list):
                             msg_type="warning",
                             is_critical=True,
                         )
-                        results.append(SystemMessage(content=(
+                        system_messages.append(SystemMessage(content=(
                             f"⚠ DISASTER WARNING: {desc}. You have ~1 step to react!"
                         )))
 
@@ -950,32 +1152,32 @@ def build_graph(tools: list):
         has_advance = "advance_simulation" in tool_names_in_batch
         if has_action and not has_advance:
             sim_model = get_model()
-            prev_disaster_count = len(sim_model.disaster_events)
-            prev_warning_count = len(sim_model.warning_events)
-            sim_model.step()
-            _log_to_model(f"Auto-step → step {sim_model.mission_step}", msg_type="system")
-            new_disasters = _check_new_disasters(prev_disaster_count)
-            if new_disasters:
-                disaster_desc = "; ".join(
-                    f"{e['type']} at step {e.get('step', '?')}" for e in new_disasters
-                )
-                results.append(SystemMessage(content=(
-                    f"⚠ DISASTER ALERT: {disaster_desc}. "
-                    "Check affected areas, reroute drones if needed, and report status."
-                )))
-            # Check for new warnings after auto-advance
-            new_warnings = sim_model.warning_events[prev_warning_count:]
-            if new_warnings:
-                desc = "; ".join(w["message"] for w in new_warnings if not w.get("resolved"))
-                if desc:
-                    _log_to_model(
-                        f"⚠ WARNING: {desc}",
-                        msg_type="warning",
-                        is_critical=True,
-                    )
-                    results.append(SystemMessage(content=(
-                        f"⚠ DISASTER WARNING: {desc}. You have ~1 step to react!"
+            if sim_model.mission_step < max_steps:
+                prev_disaster_count = len(sim_model.disaster_events)
+                prev_warning_count = len(sim_model.warning_events)
+                sim_model.step()
+                _log_to_model(f"Auto-step → step {sim_model.mission_step}", msg_type="system")
+                await asyncio.sleep(0.60)
+                new_disasters = _check_new_disasters(prev_disaster_count)
+                if new_disasters:
+                    disaster_desc = _format_disaster_desc(new_disasters)
+                    system_messages.append(SystemMessage(content=(
+                        f"⚠ DISASTER ALERT: {disaster_desc}. "
+                        "Check affected areas, reroute drones if needed, and report status."
                     )))
+                # Check for new warnings after auto-advance
+                new_warnings = sim_model.warning_events[prev_warning_count:]
+                if new_warnings:
+                    desc = "; ".join(w["message"] for w in new_warnings if not w.get("resolved"))
+                    if desc:
+                        _log_to_model(
+                            f"⚠ WARNING: {desc}",
+                            msg_type="warning",
+                            is_critical=True,
+                        )
+                        system_messages.append(SystemMessage(content=(
+                            f"⚠ DISASTER WARNING: {desc}. You have ~1 step to react!"
+                        )))
 
         # Mid-mission reflection checkpoints
         REFLECTION_INTERVAL = 8 if max_steps <= 20 else 5
@@ -988,7 +1190,7 @@ def build_graph(tools: list):
                 msg_type="reflection",
                 is_critical=True,
             )
-            results.append(SystemMessage(content=(
+            system_messages.append(SystemMessage(content=(
                 f"PERFORMANCE CHECKPOINT — Step {model.mission_step}\n"
                 f"Score: {score['total']} pts (Grade: {score['grade']})\n"
                 f"Breakdown: rescue={score['rescue_points']}, speed_bonus={score['speed_bonus']}, "
@@ -1002,7 +1204,7 @@ def build_graph(tools: list):
             model = get_model()
             urgency = _build_rescue_urgency_context(model)
             if urgency:
-                results.append(SystemMessage(content=(
+                system_messages.append(SystemMessage(content=(
                     "CRITICAL WARNING: You are stuck in an info-gathering loop while survivors are DYING.\n"
                     f"{urgency}\n"
                     "Your ONLY acceptable next calls are move_to() and rescue_survivor(). "
@@ -1029,20 +1231,20 @@ def build_graph(tools: list):
                             )
                     cluster_list = ", ".join(cluster_names)
                     orders_str = "\n".join(orders) if orders else "- Move available drones to unscanned clusters and scan"
-                    results.append(SystemMessage(content=(
+                    system_messages.append(SystemMessage(content=(
                         f"WARNING: Info-loop detected. {model.get_state()['stats']['total_survivors'] - model.get_state()['stats']['found']} survivors still UNFOUND.\n"
                         f"UNSCANNED CLUSTERS: {cluster_list}\n"
                         f"ORDERS:\n{orders_str}\n"
                         "Execute move_to() and thermal_scan() NOW. Do NOT call info tools."
                     )))
                 else:
-                    results.append(SystemMessage(content=(
+                    system_messages.append(SystemMessage(content=(
                         "WARNING: You have been calling info-only tools repeatedly without taking action. "
                         "STOP querying and START acting. Move drones, scan areas, or rescue survivors NOW. "
                         "Use move_to(), thermal_scan(), or rescue_survivor() — not get_mission_summary()."
                     )))
 
-        return {"messages": results}
+        return {"messages": tool_messages + system_messages}
 
     # Track nudge count to prevent infinite loops
     # n = consecutive nudges, total = total nudges this step, step = last seen step
@@ -1069,6 +1271,10 @@ def build_graph(tools: list):
         # ALWAYS enforce step limit, regardless of tool call type
         model = get_model()
         if model.mission_step >= max_steps:
+            # Flush any remaining unnarrated disaster events
+            narrated_count = getattr(model, '_narrated_disaster_count', 0)
+            if narrated_count < len(model.disaster_events):
+                _check_new_disasters(narrated_count)
             _log_to_model(
                 f"Step limit ({max_steps}) reached — ending mission.",
                 msg_type="system", is_critical=True,
@@ -1152,13 +1358,23 @@ def build_graph(tools: list):
 
             # Hard cap: if total nudges exceeded, force-advance the simulation
             if nudge_count["total"] >= MAX_TOTAL_NUDGES:
-                _log_to_model(
-                    f"Agent unresponsive after {MAX_TOTAL_NUDGES} nudges at step "
-                    f"{model.mission_step} — force-advancing simulation.",
-                    msg_type="system",
-                    is_critical=True,
-                )
-                model.step()
+                if model.mission_step < max_steps:
+                    prev_d = len(model.disaster_events)
+                    prev_w = len(model.warning_events)
+                    _log_to_model(
+                        f"Agent unresponsive after {MAX_TOTAL_NUDGES} nudges at step "
+                        f"{model.mission_step} — force-advancing simulation.",
+                        msg_type="system",
+                        is_critical=True,
+                    )
+                    model.step()
+                    # Flush any disasters/warnings triggered by force-advance
+                    _check_new_disasters(prev_d)
+                    new_w = model.warning_events[prev_w:]
+                    if new_w:
+                        desc = "; ".join(w["message"] for w in new_w if not w.get("resolved"))
+                        if desc:
+                            _log_to_model(f"⚠ WARNING: {desc}", msg_type="warning", is_critical=True)
                 nudge_count["n"] = 0
                 nudge_count["total"] = 0
                 nudge_count["step"] = model.mission_step

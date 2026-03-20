@@ -98,8 +98,15 @@
   60% { transform: translateY(4px); }
   100% { transform: translateY(0); opacity: 1; }
 }
-.warning-banner-in {
-  animation: warning-banner-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+
+/* Warning banner blink — slides in then pulses opacity */
+@keyframes warning-banner-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+.warning-banner-blink {
+  animation: warning-banner-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards,
+             warning-banner-blink 1s ease-in-out 0.4s infinite;
 }
 
 /* Warning banner slide-out to top */
@@ -123,6 +130,16 @@
 }
 .warning-icon-shake {
   animation: warning-icon-shake 0.5s ease-in-out infinite;
+}
+
+/* Distress signal pulse — pulsing ring for unconfirmed survivor detections */
+@keyframes distress-signal-pulse {
+  0%, 100% { transform: scale(1);   opacity: 1;   }
+  50%      { transform: scale(1.35); opacity: 0.5; }
+}
+.distress-signal-pulse {
+  position: relative;
+  animation: distress-signal-pulse 1.2s ease-in-out infinite;
 }
 
 /* Aftershock shake — grid container jitters on aftershock events */

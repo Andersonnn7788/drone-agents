@@ -2,985 +2,1097 @@
   "mission_steps": 15,
   "stats": {
     "total_survivors": 5,
-    "found": 4,
+    "found": 5,
     "alive": 5,
-    "rescued": 4,
+    "rescued": 5,
     "active_drones": 4,
     "total_drones": 4,
-    "cells_scanned": 82,
+    "cells_scanned": 117,
     "total_cells": 144,
-    "coverage_pct": 56.9
+    "coverage_pct": 81.2
   },
   "logs": [
     {
       "step": 0,
-      "timestamp": 1773940552.3642392,
+      "timestamp": 1773991372.567016,
       "message": "Mission initiated \u2014 LLM Commander online.",
       "is_critical": true,
       "type": "system"
     },
     {
       "step": 0,
-      "timestamp": 1773940574.1656275,
-      "message": "I need the fleet's live IDs and statuses to assign sectors and send each drone to its cluster center (Alpha \u2192 SW, Bravo \u2192 SE, Charlie \u2192 NW, Delta \u2192 NE); discovering drones is the first required action. Initiating fleet discovery now.",
+      "timestamp": 1773991384.5334334,
+      "message": "I will first identify all drones and their statuses to avoid hard-coding IDs, then immediately coordinate the swarm into sectors so each drone has a clear quadrant assignment for the initial simultaneous scans (preserving reserve capacity and enabling parallel early detection). Executing discovery and swarm coordination now.",
       "is_critical": false,
       "type": "reasoning"
     },
     {
       "step": 0,
-      "timestamp": 1773940574.1656275,
+      "timestamp": 1773991384.5334334,
       "message": "Tool call: discover_drones()",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 0,
-      "timestamp": 1773940574.4378176,
+      "timestamp": 1773991384.5334334,
+      "message": "Tool call: coordinate_swarm()",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 0,
+      "timestamp": 1773991385.0624652,
       "message": "Fleet online \u2014 4 drones reporting for duty.",
       "is_critical": true,
       "type": "narrative"
     },
     {
       "step": 0,
-      "timestamp": 1773940591.518234,
-      "message": "All drones start at base (6,5) with full batteries. Assign sectors and push them aggressively to their cluster centers to maximize early coverage: Alpha\u2192SW (4,4), Bravo\u2192SE (9,3), Charlie\u2192NW (2,9), Delta\u2192NE (9,9). Initiating coordination and initial moves now.",
+      "timestamp": 1773991385.0624652,
+      "message": "Swarm sectors assigned \u2014 drones dispersing for coverage.",
+      "is_critical": true,
+      "type": "narrative"
+    },
+    {
+      "step": 0,
+      "timestamp": 1773991430.575964,
+      "message": "Drones start at base (6,5) with ~70% battery each; to maximize early coverage and preserve reserves I will send Alpha to SW (3,3), Bravo to SE (9,3), Charlie to NW (3,9), and Delta to NE (9,9) \u2014 this positions each drone for immediate 5x5 thermal scans over the high-probability building clusters. Moving first to the scan points keeps scans effective and conserves battery for potential immediate rescues. Now moving all four drones to their assigned scan positions.",
       "is_critical": false,
       "type": "reasoning"
     },
     {
       "step": 0,
-      "timestamp": 1773940591.518234,
-      "message": "Tool call: coordinate_swarm()",
+      "timestamp": 1773991430.575964,
+      "message": "Tool call: move_to(drone_id=\"drone_alpha\", x=3, y=3)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 0,
-      "timestamp": 1773940591.518234,
-      "message": "Tool call: move_to(drone_id=\"drone_alpha\", x=4, y=4)",
-      "is_critical": false,
-      "type": "tool_call"
-    },
-    {
-      "step": 0,
-      "timestamp": 1773940591.518234,
+      "timestamp": 1773991430.575964,
       "message": "Tool call: move_to(drone_id=\"drone_bravo\", x=9, y=3)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 0,
-      "timestamp": 1773940591.518234,
-      "message": "Tool call: move_to(drone_id=\"drone_charlie\", x=2, y=9)",
+      "timestamp": 1773991430.575964,
+      "message": "Tool call: move_to(drone_id=\"drone_charlie\", x=3, y=9)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 0,
-      "timestamp": 1773940591.518234,
+      "timestamp": 1773991430.575964,
       "message": "Tool call: move_to(drone_id=\"drone_delta\", x=9, y=9)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
-      "step": 0,
-      "timestamp": 1773940592.738964,
-      "message": "Swarm sectors assigned \u2014 drones dispersing for coverage.",
-      "is_critical": true,
-      "type": "narrative"
-    },
-    {
       "step": 1,
-      "timestamp": 1773940592.738964,
+      "timestamp": 1773991431.9117284,
       "message": "Auto-step \u2192 step 1",
       "is_critical": false,
       "type": "system"
     },
     {
       "step": 1,
-      "timestamp": 1773940592.738964,
+      "timestamp": 1773991432.5178635,
       "message": "\u26a0 WARNING: Seismic activity detected \u2014 aftershock imminent near (5,4)!",
       "is_critical": true,
       "type": "warning"
     },
     {
       "step": 1,
-      "timestamp": 1773940639.152278,
-      "message": "Charlie is already on the critical survivor at (2,9) and must extract immediately; Bravo and Delta are co-located with other found survivors and will perform immediate extractions (Delta will then move one cell to grab the stable survivor at 8,9). Alpha will move into the SW cluster center (3,3) to perform the scheduled thermal scan next step to locate the final missing survivor. Executing immediate rescues now to secure bleeding victims.",
+      "timestamp": 1773991462.4370756,
+      "message": "Alpha is on the CRITICAL survivor at (3,3) and Bravo is on the MODERATE survivor at (9,3); to maximize survival windows I'll have both drones perform immediate move-to (no-op) then rescue actions concurrently to secure them now. Executing move_to + rescue_survivor for Alpha and Bravo.",
       "is_critical": false,
       "type": "reasoning"
     },
     {
       "step": 1,
-      "timestamp": 1773940639.152278,
-      "message": "Tool call: rescue_survivor(drone_id=\"drone_charlie\", survivor_id=3)",
-      "is_critical": false,
-      "type": "tool_call"
-    },
-    {
-      "step": 1,
-      "timestamp": 1773940639.152278,
-      "message": "Tool call: rescue_survivor(drone_id=\"drone_bravo\", survivor_id=2)",
-      "is_critical": false,
-      "type": "tool_call"
-    },
-    {
-      "step": 1,
-      "timestamp": 1773940639.152278,
-      "message": "Tool call: rescue_survivor(drone_id=\"drone_delta\", survivor_id=4)",
-      "is_critical": false,
-      "type": "tool_call"
-    },
-    {
-      "step": 1,
-      "timestamp": 1773940639.152278,
-      "message": "Tool call: move_to(drone_id=\"drone_delta\", x=8, y=9)",
-      "is_critical": false,
-      "type": "tool_call"
-    },
-    {
-      "step": 1,
-      "timestamp": 1773940639.152278,
-      "message": "Tool call: rescue_survivor(drone_id=\"drone_delta\", survivor_id=5)",
-      "is_critical": false,
-      "type": "tool_call"
-    },
-    {
-      "step": 1,
-      "timestamp": 1773940639.152278,
+      "timestamp": 1773991462.4370756,
       "message": "Tool call: move_to(drone_id=\"drone_alpha\", x=3, y=3)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 1,
-      "timestamp": 1773940640.1810489,
-      "message": "Survivor rescued successfully.",
+      "timestamp": 1773991462.4370756,
+      "message": "Tool call: rescue_survivor(drone_id=\"drone_alpha\", survivor_id=1)",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 1,
+      "timestamp": 1773991462.4370756,
+      "message": "Tool call: move_to(drone_id=\"drone_bravo\", x=9, y=3)",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 1,
+      "timestamp": 1773991462.4370756,
+      "message": "Tool call: rescue_survivor(drone_id=\"drone_bravo\", survivor_id=2)",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 1,
+      "timestamp": 1773991463.3424058,
+      "message": "Rescue failed \u2014 Drone drone_alpha is disconnected \u2014 cannot command movement. It is navigating autonomously and will rescue on contact..",
       "is_critical": true,
       "type": "triage"
     },
     {
       "step": 1,
-      "timestamp": 1773940640.1810489,
-      "message": "Survivor rescued successfully.",
-      "is_critical": true,
-      "type": "triage"
-    },
-    {
-      "step": 1,
-      "timestamp": 1773940640.1810489,
-      "message": "Survivor rescued successfully.",
-      "is_critical": true,
-      "type": "triage"
-    },
-    {
-      "step": 1,
-      "timestamp": 1773940640.1810489,
-      "message": "Survivor rescued successfully.",
+      "timestamp": 1773991463.3424058,
+      "message": "Rescue failed \u2014 Drone drone_bravo is disconnected \u2014 cannot command movement. It is navigating autonomously and will rescue on contact..",
       "is_critical": true,
       "type": "triage"
     },
     {
       "step": 2,
-      "timestamp": 1773940640.1810489,
+      "timestamp": 1773991463.3424058,
       "message": "Auto-step \u2192 step 2",
       "is_critical": false,
       "type": "system"
     },
     {
       "step": 2,
-      "timestamp": 1773940640.1810489,
+      "timestamp": 1773991463.9434268,
       "message": "\u26a0 AFTERSHOCK at (5,4) \u2014 3 cells converted to DEBRIS. Reroute drones!",
       "is_critical": true,
       "type": "narrative"
     },
     {
       "step": 2,
-      "timestamp": 1773940695.1333296,
-      "message": "Charlie is nearest to the critical survivor at (2,9) so it will extract immediately; Bravo and Delta will extract survivors at (9,3) and (9,9) respectively to secure bleeding victims. Alpha, positioned at (3,3), will perform a thermal_scan of the SW cluster to locate the remaining survivor \u2014 we'll rescue any find immediately on the next step. Initiating scan and three immediate rescues now.",
+      "timestamp": 1773991506.9013884,
+      "message": "Survivor 1 is CRITICAL at (3,3) with ~5 steps remaining \u2014 Charlie (at 3,9) is closest and will be dispatched to reach and rescue immediately. Survivor 2 is MODERATE at (9,3); Delta (at 9,9) is closest and will move there and perform the rescue concurrently to maximize early throughput. Executing simultaneous moves and rescues now.",
       "is_critical": false,
       "type": "reasoning"
     },
     {
       "step": 2,
-      "timestamp": 1773940695.1333296,
-      "message": "Tool call: thermal_scan(drone_id=\"drone_alpha\")",
+      "timestamp": 1773991506.9013884,
+      "message": "Tool call: move_to(drone_id=\"drone_charlie\", x=3, y=3)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 2,
-      "timestamp": 1773940695.1333296,
-      "message": "Tool call: rescue_survivor(drone_id=\"drone_charlie\", survivor_id=3)",
+      "timestamp": 1773991506.9013884,
+      "message": "Tool call: rescue_survivor(drone_id=\"drone_charlie\", survivor_id=1)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 2,
-      "timestamp": 1773940695.1333296,
-      "message": "Tool call: rescue_survivor(drone_id=\"drone_bravo\", survivor_id=2)",
+      "timestamp": 1773991506.9013884,
+      "message": "Tool call: move_to(drone_id=\"drone_delta\", x=9, y=3)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 2,
-      "timestamp": 1773940695.1333296,
-      "message": "Tool call: rescue_survivor(drone_id=\"drone_delta\", survivor_id=4)",
+      "timestamp": 1773991506.9013884,
+      "message": "Tool call: rescue_survivor(drone_id=\"drone_delta\", survivor_id=2)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 2,
-      "timestamp": 1773940695.4245336,
-      "message": "Thermal scan clear \u2014 no survivors in this sector.",
-      "is_critical": false,
-      "type": "narrative"
-    },
-    {
-      "step": 2,
-      "timestamp": 1773940695.4245336,
-      "message": "Survivor rescued successfully.",
+      "timestamp": 1773991508.3893738,
+      "message": "Rescue failed \u2014 Drone drone_charlie is disconnected \u2014 cannot command movement. It is navigating autonomously and will rescue on contact..",
       "is_critical": true,
       "type": "triage"
     },
     {
       "step": 2,
-      "timestamp": 1773940695.4245336,
-      "message": "Survivor rescued successfully.",
-      "is_critical": true,
-      "type": "triage"
-    },
-    {
-      "step": 2,
-      "timestamp": 1773940695.4245336,
+      "timestamp": 1773991508.3893738,
       "message": "Survivor rescued successfully.",
       "is_critical": true,
       "type": "triage"
     },
     {
       "step": 3,
-      "timestamp": 1773940695.4265318,
+      "timestamp": 1773991508.399275,
+      "message": "[AUTONOMOUS] drone_alpha rescued survivor #1 (CRITICAL) independently during blackout at (3,3)",
+      "is_critical": true,
+      "type": "system"
+    },
+    {
+      "step": 3,
+      "timestamp": 1773991508.399275,
       "message": "Auto-step \u2192 step 3",
       "is_critical": false,
       "type": "system"
     },
     {
       "step": 3,
-      "timestamp": 1773940695.4265318,
+      "timestamp": 1773991509.0008426,
       "message": "\u26a0 WARNING: Communication interference building \u2014 blackout imminent at (8,8) r=3!",
       "is_critical": true,
       "type": "warning"
     },
     {
       "step": 3,
-      "timestamp": 1773940751.3824656,
-      "message": "Bravo and Charlie are the closest connected drones to the NE cluster; I will rush Bravo to (9,9) to secure survivor 4 and Charlie to (8,9) to secure survivor 5 immediately, then advance the simulation 2 steps to allow the blackout to clear so Alpha can resume scanning the SW cluster for the last survivor. Executing moves and immediate rescues now, then advancing time to restore connectivity.",
+      "timestamp": 1773991534.3497686,
+      "message": "Delta is active with sufficient battery (45%) and has just rescued a MODERATE survivor at (9,3); I'll have Delta perform a thermal scan of the SE cluster to clear that sector and check for additional survivors while I check battery status of the swarm to monitor reserves. Executing thermal_scan with Delta and a full battery check.",
       "is_critical": false,
       "type": "reasoning"
     },
     {
       "step": 3,
-      "timestamp": 1773940751.3824656,
-      "message": "Tool call: move_to(drone_id=\"drone_bravo\", x=9, y=9)",
+      "timestamp": 1773991534.3497686,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_delta\")",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 3,
-      "timestamp": 1773940751.3824656,
-      "message": "Tool call: rescue_survivor(drone_id=\"drone_bravo\", survivor_id=4)",
+      "timestamp": 1773991534.3497686,
+      "message": "Tool call: get_battery_status()",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 3,
-      "timestamp": 1773940751.3824656,
-      "message": "Tool call: move_to(drone_id=\"drone_charlie\", x=8, y=9)",
+      "timestamp": 1773991534.9023275,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
       "is_critical": false,
-      "type": "tool_call"
+      "type": "narrative"
     },
     {
-      "step": 3,
-      "timestamp": 1773940751.3824656,
-      "message": "Tool call: rescue_survivor(drone_id=\"drone_charlie\", survivor_id=5)",
+      "step": 4,
+      "timestamp": 1773991534.9023275,
+      "message": "Auto-step \u2192 step 4",
       "is_critical": false,
-      "type": "tool_call"
+      "type": "system"
     },
     {
-      "step": 3,
-      "timestamp": 1773940751.3824656,
-      "message": "Tool call: advance_simulation(steps=2)",
-      "is_critical": false,
-      "type": "tool_call"
-    },
-    {
-      "step": 5,
-      "timestamp": 1773940752.9853554,
-      "message": "Survivor rescued successfully.",
+      "step": 4,
+      "timestamp": 1773991535.500203,
+      "message": "\u26a0 BLACKOUT at (8,8) radius 3 \u2014 disconnected drones: unknown. They are now autonomous. Do NOT try to command them until blackout clears.",
       "is_critical": true,
-      "type": "triage"
+      "type": "narrative"
+    },
+    {
+      "step": 4,
+      "timestamp": 1773991556.4428873,
+      "message": "Only Delta is connected (alpha, bravo, charlie are in blackout). I'll use Delta to perform an immediate thermal scan of the SE sector from (9,3), advance simulation one step to move the aftershock timeline forward, and then poll battery statuses to monitor reserves and plan next moves.",
+      "is_critical": false,
+      "type": "reasoning"
+    },
+    {
+      "step": 4,
+      "timestamp": 1773991556.4428873,
+      "message": "Tool call: thermal_scan(drone_id=\"drone_delta\")",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 4,
+      "timestamp": 1773991556.4428873,
+      "message": "Tool call: advance_simulation(steps=1)",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 4,
+      "timestamp": 1773991556.4428873,
+      "message": "Tool call: get_battery_status()",
+      "is_critical": false,
+      "type": "tool_call"
     },
     {
       "step": 5,
-      "timestamp": 1773940752.9853554,
-      "message": "Survivor rescued successfully.",
-      "is_critical": true,
-      "type": "triage"
+      "timestamp": 1773991557.2486825,
+      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "is_critical": false,
+      "type": "narrative"
     },
     {
       "step": 5,
-      "timestamp": 1773940752.9853554,
-      "message": "Step advanced: {\n  \"steps_advanced\": 2,\n  \"new_mission_step\": 5,\n  \"stats\": {\n    \"total_survivors\": 5,\n    \"found\": 4,\n    \"alive\": 5,\n    \"rescued\": 4,\n    \"active",
+      "timestamp": 1773991557.2486825,
+      "message": "Step advanced: {\n  \"steps_advanced\": 1,\n  \"new_mission_step\": 5,\n  \"stats\": {\n    \"total_survivors\": 5,\n    \"found\": 2,\n    \"alive\": 2,\n    \"rescued\": 2,\n    \"active",
       "is_critical": false,
       "type": "system"
     },
     {
       "step": 5,
-      "timestamp": 1773940752.9853554,
-      "message": "\u26a0 BLACKOUT at (8,8) radius 3 \u2014 disconnected drones: drone_bravo, drone_delta. They are now autonomous. Do NOT try to command them until blackout clears.",
-      "is_critical": true,
-      "type": "narrative"
-    },
-    {
-      "step": 5,
-      "timestamp": 1773940777.6811683,
-      "message": "Blackout should clear at mission step 6; I will advance the simulation one step to restore connectivity, then immediately flush buffered findings from all four drones (alpha, bravo, charlie, delta) so we can locate the last survivor and command an immediate rescue. Executing advance_simulation(1) and sync_findings for each drone now.",
+      "timestamp": 1773991583.2927458,
+      "message": "Blackout centered on (8,8) is scheduled to clear around step 6 \u2014 I'll advance the simulation one step to trigger the blackout lift, then immediately sync buffered findings from alpha/bravo/charlie and get full battery statuses to plan urgent dispatches for any NEW SURVIVOR SIGNALS. Executing advance_simulation + sync_findings for disconnected drones + get_battery_status now.",
       "is_critical": false,
       "type": "reasoning"
     },
     {
       "step": 5,
-      "timestamp": 1773940777.6811683,
+      "timestamp": 1773991583.2927458,
       "message": "Tool call: advance_simulation(steps=1)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 5,
-      "timestamp": 1773940777.6811683,
+      "timestamp": 1773991583.2927458,
       "message": "Tool call: sync_findings(drone_id=\"drone_alpha\")",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 5,
-      "timestamp": 1773940777.6811683,
+      "timestamp": 1773991583.2927458,
       "message": "Tool call: sync_findings(drone_id=\"drone_bravo\")",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 5,
-      "timestamp": 1773940777.6811683,
+      "timestamp": 1773991583.2927458,
       "message": "Tool call: sync_findings(drone_id=\"drone_charlie\")",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 5,
-      "timestamp": 1773940777.6811683,
-      "message": "Tool call: sync_findings(drone_id=\"drone_delta\")",
+      "timestamp": 1773991583.2927458,
+      "message": "Tool call: get_battery_status()",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 6,
-      "timestamp": 1773940778.2671964,
-      "message": "Step advanced: {\n  \"steps_advanced\": 1,\n  \"new_mission_step\": 6,\n  \"stats\": {\n    \"total_survivors\": 5,\n    \"found\": 4,\n    \"alive\": 5,\n    \"rescued\": 4,\n    \"active",
+      "timestamp": 1773991584.1675608,
+      "message": "Step advanced: {\n  \"steps_advanced\": 1,\n  \"new_mission_step\": 6,\n  \"stats\": {\n    \"total_survivors\": 5,\n    \"found\": 4,\n    \"alive\": 4,\n    \"rescued\": 2,\n    \"active",
       "is_critical": false,
       "type": "system"
     },
     {
       "step": 6,
-      "timestamp": 1773940778.2671964,
-      "message": "\u2713 Blackout cleared \u2014 all drones reconnected. 2 buffered findings available \u2014 call sync_findings() NOW.",
+      "timestamp": 1773991584.1675608,
+      "message": "\u2713 Blackout cleared \u2014 all drones reconnected. 1 buffered findings available \u2014 call sync_findings() NOW.",
       "is_critical": true,
       "type": "narrative"
     },
     {
       "step": 6,
-      "timestamp": 1773940778.2671964,
+      "timestamp": 1773991584.1675608,
+      "message": "\ud83c\udd98 NEW SURVIVOR SIGNAL: CRITICAL survivor detected near (2,10)! Deploy nearest drone!",
+      "is_critical": true,
+      "type": "narrative"
+    },
+    {
+      "step": 6,
+      "timestamp": 1773991584.1675608,
+      "message": "\ud83c\udd98 NEW SURVIVOR SIGNAL: MODERATE survivor detected near (9,9)! Deploy nearest drone!",
+      "is_critical": true,
+      "type": "narrative"
+    },
+    {
+      "step": 6,
+      "timestamp": 1773991584.1675608,
       "message": "\u26a0 WARNING: Water levels rising \u2014 flooding imminent near (10,7)!",
       "is_critical": true,
       "type": "warning"
     },
     {
       "step": 6,
-      "timestamp": 1773940778.2671964,
-      "message": "Buffered findings synced \u2014 2 reports recovered.",
-      "is_critical": true,
+      "timestamp": 1773991584.1675608,
+      "message": "Buffered findings synced \u2014 drone_alpha: 1 reports recovered.",
+      "is_critical": false,
       "type": "narrative"
     },
     {
       "step": 6,
-      "timestamp": 1773940778.2671964,
-      "message": "Buffered findings synced \u2014 8 reports recovered.",
-      "is_critical": true,
+      "timestamp": 1773991584.1675608,
+      "message": "Buffered findings synced \u2014 drone_bravo: 2 reports recovered.",
+      "is_critical": false,
       "type": "narrative"
     },
     {
       "step": 6,
-      "timestamp": 1773940778.2671964,
-      "message": "Buffered findings synced \u2014 1 reports recovered.",
-      "is_critical": true,
+      "timestamp": 1773991584.1675608,
+      "message": "Buffered findings synced \u2014 drone_charlie: 1 reports recovered.",
+      "is_critical": false,
       "type": "narrative"
     },
     {
       "step": 6,
-      "timestamp": 1773940778.2671964,
-      "message": "Buffered findings synced \u2014 8 reports recovered.",
-      "is_critical": true,
+      "timestamp": 1773991584.1687815,
+      "message": "Battery low \u2014 drone_delta returning to base at 32%, 2 cells away.",
+      "is_critical": false,
       "type": "narrative"
     },
     {
       "step": 6,
-      "timestamp": 1773940807.7790642,
-      "message": "Alpha is cleared and closest to the SW cluster; I will move Alpha to the SW scan center (3,3) and perform a thermal_scan to locate the remaining survivor \u2014 if the scan returns a survivor, I will move Alpha onto their cell and perform an immediate rescue on the next command batch. Executing move_to(Alpha\u21923,3) and thermal_scan now.",
+      "timestamp": 1773991604.4945862,
+      "message": "Alpha is one cell from the CRITICAL survivor at (3,3) and will secure that victim immediately; Charlie (near 2,8) is the closest active drone to the new CRITICAL at (2,10); Bravo will intercept the MODERATE at (9,9). Delta is returning to base (do NOT command it). Executing moves and rescues now.",
       "is_critical": false,
       "type": "reasoning"
     },
     {
       "step": 6,
-      "timestamp": 1773940807.7790642,
+      "timestamp": 1773991604.4945862,
       "message": "Tool call: move_to(drone_id=\"drone_alpha\", x=3, y=3)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 6,
-      "timestamp": 1773940807.7790642,
-      "message": "Tool call: thermal_scan(drone_id=\"drone_alpha\")",
+      "timestamp": 1773991604.4945862,
+      "message": "Tool call: rescue_survivor(drone_id=\"drone_alpha\", survivor_id=1)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 6,
-      "timestamp": 1773940808.5411355,
-      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "timestamp": 1773991604.4945862,
+      "message": "Tool call: move_to(drone_id=\"drone_charlie\", x=2, y=10)",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 6,
+      "timestamp": 1773991604.4945862,
+      "message": "Tool call: rescue_survivor(drone_id=\"drone_charlie\", survivor_id=3)",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 6,
+      "timestamp": 1773991604.4945862,
+      "message": "Tool call: move_to(drone_id=\"drone_bravo\", x=9, y=9)",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 6,
+      "timestamp": 1773991604.4945862,
+      "message": "Tool call: rescue_survivor(drone_id=\"drone_bravo\", survivor_id=4)",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 6,
+      "timestamp": 1773991605.4087427,
+      "message": "Survivor confirmed safe \u2014 already rescued.",
       "is_critical": false,
       "type": "narrative"
     },
     {
+      "step": 6,
+      "timestamp": 1773991605.4087427,
+      "message": "Rescue failed \u2014 Drone drone_charlie is disconnected \u2014 cannot command movement. It is navigating autonomously and will rescue on contact..",
+      "is_critical": true,
+      "type": "triage"
+    },
+    {
+      "step": 6,
+      "timestamp": 1773991605.4087427,
+      "message": "Rescue failed \u2014 Drone drone_bravo is disconnected \u2014 cannot command movement. It is navigating autonomously and will rescue on contact..",
+      "is_critical": true,
+      "type": "triage"
+    },
+    {
       "step": 7,
-      "timestamp": 1773940808.5439122,
+      "timestamp": 1773991605.4087427,
       "message": "Auto-step \u2192 step 7",
       "is_critical": false,
       "type": "system"
     },
     {
       "step": 7,
-      "timestamp": 1773940808.5439122,
+      "timestamp": 1773991606.0147822,
       "message": "\u26a0 RISING WATER \u2014 1 cells flooded. Check for survivors in danger!",
       "is_critical": true,
       "type": "narrative"
     },
     {
       "step": 7,
-      "timestamp": 1773940815.5513856,
-      "message": "Delta had previously reported survivor 5 at (8,9) but rescue attempt by Charlie failed due to survivor already rescued; current confirmed rescues: survivor 4 rescued by Bravo; synced findings show survivor 2 at (9,3) and survivor 3 at (2,9). I will command Bravo to move to (9,3) and rescue survivor 2, and Charlie to move to (2,9) to rescue survivor 3. Also move Delta to (8,9) to rescue survivor 5 if still present. Executing move_to and rescue commands now.",
+      "timestamp": 1773991606.0157855,
+      "message": "Battery low \u2014 drone_delta returning to base at 29%, 0 cells away.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 7,
+      "timestamp": 1773991642.538735,
+      "message": "Charlie is closest to the CRITICAL survivor at (2,10) and must be dispatched immediately; Bravo is nearest to the MODERATE at (9,9) and will intercept now. Delta is returning to base and will not be commanded; Alpha remains on standby near SW for coverage of new signals.",
       "is_critical": false,
       "type": "reasoning"
     },
     {
       "step": 7,
-      "timestamp": 1773940815.5514214,
-      "message": "Tool call: move_to(drone_id=\"drone_bravo\", x=9, y=3)",
+      "timestamp": 1773991642.538735,
+      "message": "Tool call: move_to(drone_id=\"drone_charlie\", x=2, y=10)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 7,
-      "timestamp": 1773940815.5514214,
-      "message": "Tool call: rescue_survivor(drone_id=\"drone_bravo\", survivor_id=2)",
-      "is_critical": false,
-      "type": "tool_call"
-    },
-    {
-      "step": 7,
-      "timestamp": 1773940815.5514214,
-      "message": "Tool call: move_to(drone_id=\"drone_charlie\", x=2, y=9)",
-      "is_critical": false,
-      "type": "tool_call"
-    },
-    {
-      "step": 7,
-      "timestamp": 1773940815.5514214,
+      "timestamp": 1773991642.538735,
       "message": "Tool call: rescue_survivor(drone_id=\"drone_charlie\", survivor_id=3)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 7,
-      "timestamp": 1773940815.5514214,
-      "message": "Tool call: move_to(drone_id=\"drone_delta\", x=8, y=9)",
+      "timestamp": 1773991642.538735,
+      "message": "Tool call: move_to(drone_id=\"drone_bravo\", x=9, y=9)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 7,
-      "timestamp": 1773940815.5514214,
-      "message": "Tool call: rescue_survivor(drone_id=\"drone_delta\", survivor_id=5)",
+      "timestamp": 1773991642.538735,
+      "message": "Tool call: rescue_survivor(drone_id=\"drone_bravo\", survivor_id=4)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 7,
-      "timestamp": 1773940816.3842556,
-      "message": "Survivor rescued successfully.",
+      "timestamp": 1773991643.4512236,
+      "message": "Rescue failed \u2014 Drone 'drone_charlie' is RETURNING to base (38% battery, 8 cells away). It will auto-charge once it arrives. Do not command it until fully recharged..",
       "is_critical": true,
       "type": "triage"
     },
     {
       "step": 7,
-      "timestamp": 1773940816.3842556,
-      "message": "Survivor rescued successfully.",
-      "is_critical": true,
-      "type": "triage"
-    },
-    {
-      "step": 7,
-      "timestamp": 1773940816.3842556,
-      "message": "Survivor rescued successfully.",
+      "timestamp": 1773991643.4517908,
+      "message": "Rescue failed \u2014 Drone drone_bravo is disconnected \u2014 cannot command movement. It is navigating autonomously and will rescue on contact..",
       "is_critical": true,
       "type": "triage"
     },
     {
       "step": 8,
-      "timestamp": 1773940816.3918045,
+      "timestamp": 1773991643.4556947,
       "message": "Auto-step \u2192 step 8",
       "is_critical": false,
       "type": "system"
     },
     {
       "step": 8,
-      "timestamp": 1773940816.3918045,
-      "message": "PERFORMANCE CHECKPOINT (step 8): Score=692, Grade=A",
+      "timestamp": 1773991644.0592105,
+      "message": "PERFORMANCE CHECKPOINT (step 8): Score=414, Grade=B",
       "is_critical": true,
       "type": "reflection"
     },
     {
       "step": 8,
-      "timestamp": 1773940860.7601488,
-      "message": "SW cluster still unconfirmed and likely contains the last unrescued survivor; Alpha is nearest and able to scan SW \u2014 sending Alpha to (3,3) to thermal_scan immediately. To maintain coverage and enable rapid extraction if Alpha finds someone, I\u2019m also repositioning Bravo to (9,2) (SE standby), Charlie to (2,9) (NW standby), and Delta to (8,9) (NE standby) so any discovered victim can be reached or rescued without delay. Executing these moves and the scan now.",
+      "timestamp": 1773991663.5621653,
+      "message": "Alpha is active and closest to the CRITICAL at (2,10) \u2014 sending Alpha straight there to secure the bleeding survivor. Bravo is nearest to the MODERATE at (9,9); attempting an immediate redeploy so it can intercept and rescue before health degrades.",
       "is_critical": false,
       "type": "reasoning"
     },
     {
       "step": 8,
-      "timestamp": 1773940860.7601488,
-      "message": "Tool call: move_to(drone_id=\"drone_alpha\", x=3, y=3)",
+      "timestamp": 1773991663.5621653,
+      "message": "Tool call: move_to(drone_id=\"drone_alpha\", x=2, y=10)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 8,
-      "timestamp": 1773940860.7601488,
-      "message": "Tool call: thermal_scan(drone_id=\"drone_alpha\")",
+      "timestamp": 1773991663.5621653,
+      "message": "Tool call: rescue_survivor(drone_id=\"drone_alpha\", survivor_id=3)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 8,
-      "timestamp": 1773940860.7601488,
-      "message": "Tool call: move_to(drone_id=\"drone_bravo\", x=9, y=2)",
+      "timestamp": 1773991663.5621653,
+      "message": "Tool call: move_to(drone_id=\"drone_bravo\", x=9, y=9)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 8,
-      "timestamp": 1773940860.7601488,
-      "message": "Tool call: move_to(drone_id=\"drone_charlie\", x=2, y=9)",
+      "timestamp": 1773991663.5621653,
+      "message": "Tool call: rescue_survivor(drone_id=\"drone_bravo\", survivor_id=4)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 8,
-      "timestamp": 1773940860.7601488,
-      "message": "Tool call: move_to(drone_id=\"drone_delta\", x=8, y=9)",
-      "is_critical": false,
-      "type": "tool_call"
+      "timestamp": 1773991665.3748026,
+      "message": "Rescue failed \u2014 Drone drone_alpha is disconnected \u2014 cannot command movement. It is navigating autonomously and will rescue on contact..",
+      "is_critical": true,
+      "type": "triage"
     },
     {
       "step": 8,
-      "timestamp": 1773940861.5320635,
-      "message": "Thermal scan clear \u2014 no survivors in this sector.",
-      "is_critical": false,
+      "timestamp": 1773991665.3748026,
+      "message": "Movement blocked at (8,8) \u2014 insufficient battery for round trip \u2014 battery after move=20, return cost=21. Recall to base instead..",
+      "is_critical": true,
       "type": "narrative"
     },
     {
+      "step": 8,
+      "timestamp": 1773991665.3748026,
+      "message": "Rescue failed \u2014 Drone drone_bravo is disconnected \u2014 cannot command movement. It is navigating autonomously and will rescue on contact..",
+      "is_critical": true,
+      "type": "triage"
+    },
+    {
       "step": 9,
-      "timestamp": 1773940861.5320635,
+      "timestamp": 1773991665.3748026,
       "message": "Auto-step \u2192 step 9",
       "is_critical": false,
       "type": "system"
     },
     {
       "step": 9,
-      "timestamp": 1773940915.8348968,
-      "message": "First I must enumerate active drones to avoid hard-coding IDs; discovering drones now so I can coordinate sectors and issue precise move orders to Alpha/Bravo/Charlie/Delta. Proceeding to call discover_drones().",
-      "is_critical": false,
-      "type": "reasoning"
+      "timestamp": 1773991665.977073,
+      "message": "\u26a0 WARNING: Seismic activity detected \u2014 second aftershock imminent near (4,2)!",
+      "is_critical": true,
+      "type": "warning"
     },
     {
       "step": 9,
-      "timestamp": 1773940915.8348968,
-      "message": "Tool call: discover_drones()",
-      "is_critical": false,
-      "type": "tool_call"
-    },
-    {
-      "step": 9,
-      "timestamp": 1773940916.114684,
-      "message": "Fleet status refreshed \u2014 4 drones active.",
+      "timestamp": 1773991665.9781005,
+      "message": "Battery low \u2014 drone_alpha returning to base at 32%, 5 cells away.",
       "is_critical": false,
       "type": "narrative"
     },
     {
       "step": 9,
-      "timestamp": 1773940941.3746288,
-      "message": "All drones have been enumerated and show current sectors; I will finalize sector coordination and push each drone toward its assigned cluster approach point so they can begin focused scans as soon as connectivity allows. Sending coordinate_swarm, then moving Alpha\u2192(4,4), Bravo\u2192(9,3), Charlie\u2192(2,9), Delta\u2192(9,9) to position them for the Step 1 scans.",
+      "timestamp": 1773991665.9781005,
+      "message": "Battery low \u2014 drone_bravo returning to base at 19%, 3 cells away.",
+      "is_critical": true,
+      "type": "narrative"
+    },
+    {
+      "step": 9,
+      "timestamp": 1773991665.9781005,
+      "message": "Battery low \u2014 drone_charlie returning to base at 32%, 4 cells away.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 9,
+      "timestamp": 1773991679.5615098,
+      "message": "Delta is the only active drone with full charge and is the nearest available responder; I'll send drone_delta first to the CRITICAL at (2,10) to secure survivor 3, then route it straight to (9,9) to extract survivor 4\u2014this minimizes time-to-rescue and preserves other drones for contingency. Executing move_to \u2192 rescue_survivor sequence for drone_delta now.",
       "is_critical": false,
       "type": "reasoning"
     },
     {
       "step": 9,
-      "timestamp": 1773940941.3746288,
-      "message": "Tool call: coordinate_swarm()",
+      "timestamp": 1773991679.5615098,
+      "message": "Tool call: move_to(drone_id=\"drone_delta\", x=2, y=10)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 9,
-      "timestamp": 1773940941.3746288,
-      "message": "Tool call: move_to(drone_id=\"drone_alpha\", x=4, y=4)",
+      "timestamp": 1773991679.5615098,
+      "message": "Tool call: rescue_survivor(drone_id=\"drone_delta\", survivor_id=3)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 9,
-      "timestamp": 1773940941.3746288,
-      "message": "Tool call: move_to(drone_id=\"drone_bravo\", x=9, y=3)",
-      "is_critical": false,
-      "type": "tool_call"
-    },
-    {
-      "step": 9,
-      "timestamp": 1773940941.3746288,
-      "message": "Tool call: move_to(drone_id=\"drone_charlie\", x=2, y=9)",
-      "is_critical": false,
-      "type": "tool_call"
-    },
-    {
-      "step": 9,
-      "timestamp": 1773940941.3746288,
+      "timestamp": 1773991679.5615098,
       "message": "Tool call: move_to(drone_id=\"drone_delta\", x=9, y=9)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 9,
-      "timestamp": 1773940942.143841,
-      "message": "Sectors reassigned \u2014 adjusting coverage.",
+      "timestamp": 1773991679.5615098,
+      "message": "Tool call: rescue_survivor(drone_id=\"drone_delta\", survivor_id=4)",
       "is_critical": false,
-      "type": "narrative"
+      "type": "tool_call"
+    },
+    {
+      "step": 9,
+      "timestamp": 1773991682.0814145,
+      "message": "Survivor rescued successfully.",
+      "is_critical": true,
+      "type": "triage"
+    },
+    {
+      "step": 9,
+      "timestamp": 1773991682.0814145,
+      "message": "Rescue failed \u2014 Drone drone_delta is disconnected \u2014 cannot command movement. It is navigating autonomously and will rescue on contact..",
+      "is_critical": true,
+      "type": "triage"
     },
     {
       "step": 10,
-      "timestamp": 1773940942.143841,
+      "timestamp": 1773991682.0915658,
       "message": "Auto-step \u2192 step 10",
       "is_critical": false,
       "type": "system"
     },
     {
       "step": 10,
-      "timestamp": 1773940943.8764982,
-      "message": "Connectivity is currently down for all drones (blackout). I will advance the simulation one step to let autonomous behavior proceed and potentially clear local blackouts; this also preserves their buffered findings. Advancing 1 step now.",
+      "timestamp": 1773991682.701319,
+      "message": "\u26a0 AFTERSHOCK at (4,2) \u2014 3 cells converted to DEBRIS. Reroute drones!",
+      "is_critical": true,
+      "type": "narrative"
+    },
+    {
+      "step": 10,
+      "timestamp": 1773991682.701319,
+      "message": "Battery low \u2014 drone_alpha returning to base at 29%, 5 cells away.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 10,
+      "timestamp": 1773991682.701319,
+      "message": "Battery low \u2014 drone_bravo returning to base at 16%, 1 cells away.",
+      "is_critical": true,
+      "type": "narrative"
+    },
+    {
+      "step": 10,
+      "timestamp": 1773991682.701319,
+      "message": "Battery low \u2014 drone_charlie returning to base at 29%, 2 cells away.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 10,
+      "timestamp": 1773991716.4324598,
+      "message": "Delta is the only active drone with sufficient battery after securing survivor 3; I'm sending drone_delta directly from (2,10) to (9,9) to extract the MODERATE survivor at (9,9) before health degrades. Alpha/Bravo/Charlie are returning to base\u2014do NOT command them.",
       "is_critical": false,
       "type": "reasoning"
     },
     {
       "step": 10,
-      "timestamp": 1773940943.8764982,
-      "message": "Tool call: advance_simulation(steps=1)",
+      "timestamp": 1773991716.4324598,
+      "message": "Tool call: move_to(drone_id=\"drone_delta\", x=9, y=9)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
+      "step": 10,
+      "timestamp": 1773991716.4324598,
+      "message": "Tool call: rescue_survivor(drone_id=\"drone_delta\", survivor_id=4)",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 10,
+      "timestamp": 1773991717.3261566,
+      "message": "Rescue failed \u2014 Drone drone_delta is disconnected \u2014 cannot command movement. It is navigating autonomously and will rescue on contact..",
+      "is_critical": true,
+      "type": "triage"
+    },
+    {
       "step": 11,
-      "timestamp": 1773940944.1541061,
-      "message": "Step advanced: {\n  \"steps_advanced\": 1,\n  \"new_mission_step\": 11,\n  \"stats\": {\n    \"total_survivors\": 5,\n    \"found\": 4,\n    \"alive\": 5,\n    \"rescued\": 4,\n    \"activ",
+      "timestamp": 1773991717.3261566,
+      "message": "Auto-step \u2192 step 11",
       "is_critical": false,
       "type": "system"
     },
     {
       "step": 11,
-      "timestamp": 1773940986.4629815,
-      "message": "Blackout appears to have cleared after the simulation step; four survivors are already rescued and one remains. I'll flush buffered findings from drones that were disconnected (Alpha, Charlie, Delta) to get any autonomous discoveries, then position Alpha to scan the high-probability SW cluster (3,3) immediately \u2014 the SW cluster is the most likely location for the last survivor \u2014 while repositioning Bravo/Charlie/Delta to standby points so any detected victim can be reached quickly. Executing syncs, a focused scan, and reposition moves now.",
+      "timestamp": 1773991717.9360702,
+      "message": "\ud83c\udd98 NEW SURVIVOR SIGNAL: STABLE survivor detected near (1,1)! Deploy nearest drone!",
+      "is_critical": true,
+      "type": "narrative"
+    },
+    {
+      "step": 11,
+      "timestamp": 1773991717.9360702,
+      "message": "Battery low \u2014 drone_alpha returning to base at 26%, 4 cells away.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 11,
+      "timestamp": 1773991717.9360702,
+      "message": "Battery low \u2014 drone_bravo returning to base at 13%, 0 cells away.",
+      "is_critical": true,
+      "type": "narrative"
+    },
+    {
+      "step": 11,
+      "timestamp": 1773991717.9360702,
+      "message": "Battery low \u2014 drone_charlie returning to base at 26%, 2 cells away.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 11,
+      "timestamp": 1773991747.581678,
+      "message": "Delta is the only active and available drone \u2014 I'll send drone_delta from (2,10) to (9,9) to immediately extract survivor 4 (MODERATE), then route it to (1,1) to pick up survivor 5 (STABLE). This sequence prioritizes the bleeding MODERATE while completing all remaining rescues with the single active asset.",
       "is_critical": false,
       "type": "reasoning"
     },
     {
       "step": 11,
-      "timestamp": 1773940986.4629815,
-      "message": "Tool call: sync_findings(drone_id=\"drone_alpha\")",
-      "is_critical": false,
-      "type": "tool_call"
-    },
-    {
-      "step": 11,
-      "timestamp": 1773940986.4629815,
-      "message": "Tool call: sync_findings(drone_id=\"drone_charlie\")",
-      "is_critical": false,
-      "type": "tool_call"
-    },
-    {
-      "step": 11,
-      "timestamp": 1773940986.4629815,
-      "message": "Tool call: sync_findings(drone_id=\"drone_delta\")",
-      "is_critical": false,
-      "type": "tool_call"
-    },
-    {
-      "step": 11,
-      "timestamp": 1773940986.4629815,
-      "message": "Tool call: move_to(drone_id=\"drone_alpha\", x=3, y=3)",
-      "is_critical": false,
-      "type": "tool_call"
-    },
-    {
-      "step": 11,
-      "timestamp": 1773940986.4629815,
-      "message": "Tool call: thermal_scan(drone_id=\"drone_alpha\")",
-      "is_critical": false,
-      "type": "tool_call"
-    },
-    {
-      "step": 11,
-      "timestamp": 1773940986.4629815,
-      "message": "Tool call: move_to(drone_id=\"drone_bravo\", x=9, y=2)",
-      "is_critical": false,
-      "type": "tool_call"
-    },
-    {
-      "step": 11,
-      "timestamp": 1773940986.4629815,
-      "message": "Tool call: move_to(drone_id=\"drone_charlie\", x=2, y=9)",
-      "is_critical": false,
-      "type": "tool_call"
-    },
-    {
-      "step": 11,
-      "timestamp": 1773940986.4629815,
+      "timestamp": 1773991747.581678,
       "message": "Tool call: move_to(drone_id=\"drone_delta\", x=9, y=9)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 11,
-      "timestamp": 1773940987.5068028,
-      "message": "Buffered findings synced \u2014 0 reports recovered.",
-      "is_critical": true,
-      "type": "narrative"
-    },
-    {
-      "step": 11,
-      "timestamp": 1773940987.5068028,
-      "message": "Buffered findings synced \u2014 3 reports recovered.",
-      "is_critical": true,
-      "type": "narrative"
-    },
-    {
-      "step": 11,
-      "timestamp": 1773940987.5068028,
-      "message": "Buffered findings synced \u2014 10 reports recovered.",
-      "is_critical": true,
-      "type": "narrative"
-    },
-    {
-      "step": 11,
-      "timestamp": 1773940987.5068028,
-      "message": "Thermal scan clear \u2014 no survivors in this sector.",
+      "timestamp": 1773991747.581678,
+      "message": "Tool call: rescue_survivor(drone_id=\"drone_delta\", survivor_id=4)",
       "is_critical": false,
-      "type": "narrative"
+      "type": "tool_call"
+    },
+    {
+      "step": 11,
+      "timestamp": 1773991747.581678,
+      "message": "Tool call: move_to(drone_id=\"drone_delta\", x=1, y=1)",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 11,
+      "timestamp": 1773991747.581678,
+      "message": "Tool call: rescue_survivor(drone_id=\"drone_delta\", survivor_id=5)",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 11,
+      "timestamp": 1773991749.367577,
+      "message": "Rescue failed \u2014 Drone drone_delta is disconnected \u2014 cannot command movement. It is navigating autonomously and will rescue on contact..",
+      "is_critical": true,
+      "type": "triage"
+    },
+    {
+      "step": 11,
+      "timestamp": 1773991749.367577,
+      "message": "Rescue failed \u2014 Drone drone_delta is disconnected \u2014 cannot command movement. It is navigating autonomously and will rescue on contact..",
+      "is_critical": true,
+      "type": "triage"
     },
     {
       "step": 12,
-      "timestamp": 1773940987.5068028,
+      "timestamp": 1773991749.367577,
       "message": "Auto-step \u2192 step 12",
       "is_critical": false,
       "type": "system"
     },
     {
       "step": 12,
-      "timestamp": 1773940989.8840973,
-      "message": "My synced buffers show no new survivors from disconnected autonomy. The remaining survivor must be in an unscanned cell, likely SW cluster; Alpha is autonomous and disconnected again, so I will advance simulation to let the autonomous Alpha move into SW cluster and perform a scan/rescue if it encounters someone, while Bravo, Charlie, and Delta hold positions ready. Advancing 1 step now to let autonomous behavior act.",
+      "timestamp": 1773991749.974568,
+      "message": "Battery low \u2014 drone_alpha returning to base at 23%, 2 cells away.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 12,
+      "timestamp": 1773991749.974568,
+      "message": "Battery low \u2014 drone_charlie returning to base at 23%, 0 cells away.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 12,
+      "timestamp": 1773991766.9691362,
+      "message": "Drone_delta is active with sufficient battery (~78%) and closest to the MODERATE at (9,9); I'll send it to (9,9) to extract survivor 4 immediately, then route it to (1,1) to retrieve survivor 5\u2014this prioritizes the more urgent case while completing both rescues in one sortie. Executing move_to \u2192 rescue_survivor \u2192 move_to \u2192 rescue_survivor now.",
       "is_critical": false,
       "type": "reasoning"
     },
     {
       "step": 12,
-      "timestamp": 1773940989.8840973,
-      "message": "Tool call: advance_simulation(steps=1)",
+      "timestamp": 1773991766.9691362,
+      "message": "Tool call: move_to(drone_id=\"drone_delta\", x=9, y=9)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
+      "step": 12,
+      "timestamp": 1773991766.9691362,
+      "message": "Tool call: rescue_survivor(drone_id=\"drone_delta\", survivor_id=4)",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 12,
+      "timestamp": 1773991766.9691362,
+      "message": "Tool call: move_to(drone_id=\"drone_delta\", x=1, y=1)",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 12,
+      "timestamp": 1773991766.9691362,
+      "message": "Tool call: rescue_survivor(drone_id=\"drone_delta\", survivor_id=5)",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 12,
+      "timestamp": 1773991769.351337,
+      "message": "Survivor rescued successfully.",
+      "is_critical": true,
+      "type": "triage"
+    },
+    {
+      "step": 12,
+      "timestamp": 1773991769.351337,
+      "message": "Rescue failed \u2014 Drone drone_delta is disconnected \u2014 cannot command movement. It is navigating autonomously and will rescue on contact..",
+      "is_critical": true,
+      "type": "triage"
+    },
+    {
       "step": 13,
-      "timestamp": 1773940990.168003,
-      "message": "Step advanced: {\n  \"steps_advanced\": 1,\n  \"new_mission_step\": 13,\n  \"stats\": {\n    \"total_survivors\": 5,\n    \"found\": 4,\n    \"alive\": 5,\n    \"rescued\": 4,\n    \"activ",
+      "timestamp": 1773991769.351337,
+      "message": "Auto-step \u2192 step 13",
       "is_critical": false,
       "type": "system"
     },
     {
       "step": 13,
-      "timestamp": 1773940992.8614626,
-      "message": "Alpha's autonomy may have found or reached the survivor during that step; I need to sync Alpha's buffered findings to confirm and, if a survivor is reported with position, I will immediately command the nearest connected drone with sufficient battery to move and rescue following the golden rule. Syncing Alpha now and preparing Bravo to move to SW survivor if reported.",
+      "timestamp": 1773991769.9542732,
+      "message": "Battery low \u2014 drone_alpha returning to base at 20%, 0 cells away.",
+      "is_critical": false,
+      "type": "narrative"
+    },
+    {
+      "step": 13,
+      "timestamp": 1773991781.2667067,
+      "message": "Bravo is fully charged and closest to the STABLE survivor at (1,1); I'll send drone_bravo to (1,1) to pick up survivor 5 immediately\u2014do not command alpha or charlie while they're returning/charging. Executing move_to \u2192 rescue_survivor for drone_bravo now.",
       "is_critical": false,
       "type": "reasoning"
     },
     {
       "step": 13,
-      "timestamp": 1773940992.8614626,
-      "message": "Tool call: sync_findings(drone_id=\"drone_alpha\")",
+      "timestamp": 1773991781.2667067,
+      "message": "Tool call: move_to(drone_id=\"drone_bravo\", x=1, y=1)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 13,
-      "timestamp": 1773940992.8614626,
-      "message": "Tool call: move_to(drone_id=\"drone_bravo\", x=3, y=3)",
+      "timestamp": 1773991781.2667067,
+      "message": "Tool call: rescue_survivor(drone_id=\"drone_bravo\", survivor_id=5)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 13,
-      "timestamp": 1773940993.3479583,
-      "message": "Buffered findings synced \u2014 0 reports recovered.",
+      "timestamp": 1773991782.8771973,
+      "message": "Survivor rescued successfully.",
       "is_critical": true,
-      "type": "narrative"
+      "type": "triage"
     },
     {
       "step": 14,
-      "timestamp": 1773940993.3479583,
+      "timestamp": 1773991782.8771973,
       "message": "Auto-step \u2192 step 14",
       "is_critical": false,
       "type": "system"
     },
     {
       "step": 14,
-      "timestamp": 1773940997.9998627,
-      "message": "Alpha reported no buffered survivor findings. To complete the mission within remaining steps, I will aggressively scan all unscanned cluster centers sequentially: send Bravo to SW (3,3) to scan, Charlie to SE (9,2) to scan, Delta to NW (3,9) to scan. If any thermal_scan returns a survivor, I will move that drone to the survivor position and immediately rescue. Executing move_to for Bravo/Charlie/Delta and thermal_scans at their cluster centers now.",
+      "timestamp": 1773991808.8573844,
+      "message": "Alpha is charging and unavailable; I'll check all drones' battery/status to confirm active units, then send the active drones to the high-probability clusters: Bravo\u2192SW (3,3), Charlie\u2192NW (3,9), Delta\u2192SE (9,3) for immediate thermal scans to locate the remaining survivors. Executing battery check then move_to\u2192thermal_scan for each active drone.",
       "is_critical": false,
       "type": "reasoning"
     },
     {
       "step": 14,
-      "timestamp": 1773940997.9998627,
+      "timestamp": 1773991808.8573844,
+      "message": "Tool call: get_battery_status()",
+      "is_critical": false,
+      "type": "tool_call"
+    },
+    {
+      "step": 14,
+      "timestamp": 1773991808.8573844,
       "message": "Tool call: move_to(drone_id=\"drone_bravo\", x=3, y=3)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 14,
-      "timestamp": 1773940997.9998627,
-      "message": "Tool call: move_to(drone_id=\"drone_charlie\", x=9, y=2)",
+      "timestamp": 1773991808.8573844,
+      "message": "Tool call: move_to(drone_id=\"drone_charlie\", x=3, y=9)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 14,
-      "timestamp": 1773940997.9998627,
-      "message": "Tool call: move_to(drone_id=\"drone_delta\", x=3, y=9)",
+      "timestamp": 1773991808.8573844,
+      "message": "Tool call: move_to(drone_id=\"drone_delta\", x=9, y=3)",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 14,
-      "timestamp": 1773940997.9998627,
+      "timestamp": 1773991808.8573844,
       "message": "Tool call: thermal_scan(drone_id=\"drone_bravo\")",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 14,
-      "timestamp": 1773940997.9998627,
+      "timestamp": 1773991808.8573844,
       "message": "Tool call: thermal_scan(drone_id=\"drone_charlie\")",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 14,
-      "timestamp": 1773940997.9998627,
+      "timestamp": 1773991808.8573844,
       "message": "Tool call: thermal_scan(drone_id=\"drone_delta\")",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 14,
-      "timestamp": 1773940998.7486207,
+      "timestamp": 1773991810.634079,
+      "message": "Battery alert \u2014 drone(s) below 20%.",
+      "is_critical": true,
+      "type": "narrative"
+    },
+    {
+      "step": 14,
+      "timestamp": 1773991810.634079,
       "message": "Thermal scan clear \u2014 no survivors in this sector.",
       "is_critical": false,
       "type": "narrative"
     },
     {
       "step": 14,
-      "timestamp": 1773940998.7486207,
+      "timestamp": 1773991810.634079,
       "message": "Thermal scan clear \u2014 no survivors in this sector.",
       "is_critical": false,
       "type": "narrative"
     },
     {
       "step": 14,
-      "timestamp": 1773940998.7486207,
+      "timestamp": 1773991810.634079,
       "message": "Thermal scan clear \u2014 no survivors in this sector.",
       "is_critical": false,
       "type": "narrative"
     },
     {
       "step": 15,
-      "timestamp": 1773940998.7486207,
+      "timestamp": 1773991810.634079,
       "message": "Auto-step \u2192 step 15",
       "is_critical": false,
       "type": "system"
     },
     {
       "step": 15,
-      "timestamp": 1773941025.5740201,
-      "message": "Finalizing mission: blackout clearance confirmed earlier but one survivor remains unrescued; I'll flush all drones' buffered findings one last time to ensure no queued detections remain before concluding and then provide a concise final assessment and lessons learned. Executing sync_findings for Alpha, Bravo, Charlie, and Delta now.",
+      "timestamp": 1773991819.0218418,
+      "message": "Time's up\u2014mission step limit reached; I must retrieve the mission summary now to report outcomes and assess failures/successes. Calling get_mission_summary to collect final statuses and survivor/rescue details.",
       "is_critical": false,
       "type": "reasoning"
     },
     {
       "step": 15,
-      "timestamp": 1773941025.5740201,
-      "message": "Tool call: sync_findings(drone_id=\"drone_alpha\")",
+      "timestamp": 1773991819.0218418,
+      "message": "Tool call: get_mission_summary()",
       "is_critical": false,
       "type": "tool_call"
     },
     {
       "step": 15,
-      "timestamp": 1773941025.5740201,
-      "message": "Tool call: sync_findings(drone_id=\"drone_bravo\")",
-      "is_critical": false,
-      "type": "tool_call"
-    },
-    {
-      "step": 15,
-      "timestamp": 1773941025.5740201,
-      "message": "Tool call: sync_findings(drone_id=\"drone_charlie\")",
-      "is_critical": false,
-      "type": "tool_call"
-    },
-    {
-      "step": 15,
-      "timestamp": 1773941025.5740201,
-      "message": "Tool call: sync_findings(drone_id=\"drone_delta\")",
-      "is_critical": false,
-      "type": "tool_call"
-    },
-    {
-      "step": 15,
-      "timestamp": 1773941025.5749805,
+      "timestamp": 1773991819.0218418,
       "message": "Step limit (15) reached \u2014 ending mission.",
       "is_critical": true,
       "type": "system"
@@ -1017,15 +1129,32 @@
         8
       ],
       "radius": 3,
-      "affected_drones": [
-        "drone_bravo",
-        "drone_delta"
-      ]
+      "affected_drones": []
     },
     {
       "type": "blackout_cleared",
       "step": 6,
       "message": "Communication blackout has lifted. All drones reconnected."
+    },
+    {
+      "type": "survivor_detected",
+      "step": 6,
+      "position": [
+        2,
+        10
+      ],
+      "severity": "CRITICAL",
+      "message": "New distress signal! CRITICAL survivor detected near (2,10)!"
+    },
+    {
+      "type": "survivor_detected",
+      "step": 6,
+      "position": [
+        9,
+        9
+      ],
+      "severity": "MODERATE",
+      "message": "New distress signal! MODERATE survivor detected near (9,9)!"
     },
     {
       "type": "rising_water",
@@ -1040,6 +1169,38 @@
           7
         ]
       ]
+    },
+    {
+      "type": "aftershock",
+      "step": 10,
+      "center": [
+        4,
+        2
+      ],
+      "affected_cells": [
+        [
+          3,
+          1
+        ],
+        [
+          4,
+          1
+        ],
+        [
+          4,
+          2
+        ]
+      ]
+    },
+    {
+      "type": "survivor_detected",
+      "step": 11,
+      "position": [
+        1,
+        1
+      ],
+      "severity": "STABLE",
+      "message": "Weak rescue signal detected near (1,1)! A STABLE survivor may be trapped under rubble."
     }
   ]
 }

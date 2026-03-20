@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   api,
   connectSSE,
@@ -10,6 +10,7 @@ import {
   LessonLearned,
   LogEntry,
   MissionCompleteData,
+  PendingRescue,
   RescueToast,
   ScoreBreakdown,
   SimState,
@@ -50,10 +51,63 @@ export default function Page() {
   const [rescueBursts, setRescueBursts] = useState<Map<number, [number, number]>>(new Map());
   const [activeWarnings, setActiveWarnings] = useState<WarningEvent[]>([]);
   const prevSurvivorsRef = useRef<Map<number, SurvivorState>>(new Map());
+  const [pendingRescues, setPendingRescues] = useState<Map<number, PendingRescue>>(new Map());
+  const pendingRescuesRef = useRef<Map<number, PendingRescue>>(new Map());
 
   // Keep a ref to the latest simState for use in SSE handlers
   const simStateRef = useRef<SimState | null>(null);
   simStateRef.current = simState;
+  pendingRescuesRef.current = pendingRescues;
+
+  // Fire deferred rescue visuals (burst, score, toast) for a single survivor
+  const handleRescueArrived = useCallback((survivorId: number) => {
+    const pending = pendingRescuesRef.current.get(survivorId);
+    if (!pending) return;
+    // Remove from ref immediately to prevent double-firing
+    const nextRef = new Map(pendingRescuesRef.current);
+    nextRef.delete(survivorId);
+    pendingRescuesRef.current = nextRef;
+    setPendingRescues((prev) => { const next = new Map(prev); next.delete(survivorId); return next; });
+
+    // Rescue burst
+    setRescueBursts((cur) => { const next = new Map(cur); next.set(survivorId, pending.position); return next; });
+    setTimeout(() => {
+      setRescueBursts((cur) => { const next = new Map(cur); next.delete(survivorId); return next; });
+    }, 1400);
+
+    // Scoring
+    setGameScore((prev) => {
+      const isStreak = prev.lastRescueStep !== null && pending.rescuedAtStep - prev.lastRescueStep <= 5;
+      const base = pending.severity === 'CRITICAL' ? 100 : pending.severity === 'MODERATE' ? 70 : 50;
+      const pointsEarned = base + Math.round(pending.health * 50);
+      return {
+        total: prev.total + pointsEarned,
+        livesSaved: prev.livesSaved + 1,
+        streak: isStreak ? prev.streak + 1 : 1,
+        lastRescueStep: pending.rescuedAtStep,
+      };
+    });
+    setScorePop(true); setLivesPop(true);
+    setTimeout(() => setScorePop(false), 500);
+    setTimeout(() => setLivesPop(false), 450);
+
+    // Toast
+    const base = pending.severity === 'CRITICAL' ? 100 : pending.severity === 'MODERATE' ? 70 : 50;
+    const bonus = Math.round(pending.health * 50);
+    const toast: RescueToast = {
+      id: `${survivorId}-${Date.now()}`,
+      survivorId,
+      severity: pending.severity,
+      healthAtRescue: pending.health,
+      points: base + bonus,
+      dismissing: false,
+    };
+    setToasts((cur) => [...cur, toast]);
+    setTimeout(() => {
+      setToasts((cur) => cur.map((t) => t.id === toast.id ? { ...t, dismissing: true } : t));
+      setTimeout(() => setToasts((cur) => cur.filter((t) => t.id !== toast.id)), 320);
+    }, 3000);
+  }, []);
 
   // Survivor state transition detection
   useEffect(() => {
@@ -77,55 +131,81 @@ export default function Page() {
     }
 
     if (newlyRescued.length > 0) {
-      // Rescue burst positions
-      setRescueBursts((cur) => {
-        const next = new Map(cur);
-        for (const s of newlyRescued) { if (s.position) next.set(s.survivor_id, s.position); }
-        return next;
-      });
-      const rescuedIds = newlyRescued.map((s) => s.survivor_id);
-      setTimeout(() => {
-        setRescueBursts((cur) => { const next = new Map(cur); rescuedIds.forEach((id) => next.delete(id)); return next; });
-      }, 1400);
+      if (replayStep !== null) {
+        // Replay mode: fire effects immediately (no animation queue in replay)
+        setRescueBursts((cur) => {
+          const next = new Map(cur);
+          for (const s of newlyRescued) { if (s.position) next.set(s.survivor_id, s.position); }
+          return next;
+        });
+        const rescuedIds = newlyRescued.map((s) => s.survivor_id);
+        setTimeout(() => {
+          setRescueBursts((cur) => { const next = new Map(cur); rescuedIds.forEach((id) => next.delete(id)); return next; });
+        }, 1400);
 
-      // Scoring
-      const stepNow = simState.mission_step;
-      setGameScore((prev) => {
-        const isStreak = prev.lastRescueStep !== null && stepNow - prev.lastRescueStep <= 5;
-        let pointsEarned = 0;
+        const stepNow = simState.mission_step;
+        setGameScore((prev) => {
+          const isStreak = prev.lastRescueStep !== null && stepNow - prev.lastRescueStep <= 5;
+          let pointsEarned = 0;
+          for (const s of newlyRescued) {
+            const base = s.severity === 'CRITICAL' ? 100 : s.severity === 'MODERATE' ? 70 : 50;
+            pointsEarned += base + Math.round(s.health * 50);
+          }
+          return {
+            total: prev.total + pointsEarned,
+            livesSaved: prev.livesSaved + newlyRescued.length,
+            streak: isStreak ? prev.streak + newlyRescued.length : newlyRescued.length,
+            lastRescueStep: stepNow,
+          };
+        });
+        setScorePop(true); setLivesPop(true);
+        setTimeout(() => setScorePop(false), 500);
+        setTimeout(() => setLivesPop(false), 450);
+
         for (const s of newlyRescued) {
           const base = s.severity === 'CRITICAL' ? 100 : s.severity === 'MODERATE' ? 70 : 50;
-          pointsEarned += base + Math.round(s.health * 50);
+          const bonus = Math.round(s.health * 50);
+          const toast: RescueToast = {
+            id: `${s.survivor_id}-${Date.now()}`,
+            survivorId: s.survivor_id,
+            severity: s.severity,
+            healthAtRescue: s.health,
+            points: base + bonus,
+            dismissing: false,
+          };
+          setToasts((cur) => [...cur, toast]);
+          setTimeout(() => {
+            setToasts((cur) => cur.map((t) => t.id === toast.id ? { ...t, dismissing: true } : t));
+            setTimeout(() => setToasts((cur) => cur.filter((t) => t.id !== toast.id)), 320);
+          }, 3000);
         }
-        return {
-          total: prev.total + pointsEarned,
-          livesSaved: prev.livesSaved + newlyRescued.length,
-          streak: isStreak ? prev.streak + newlyRescued.length : newlyRescued.length,
-          lastRescueStep: stepNow,
-        };
-      });
-
-      setScorePop(true); setLivesPop(true);
-      setTimeout(() => setScorePop(false), 500);
-      setTimeout(() => setLivesPop(false), 450);
-
-      // Toasts
-      for (const s of newlyRescued) {
-        const base = s.severity === 'CRITICAL' ? 100 : s.severity === 'MODERATE' ? 70 : 50;
-        const bonus = Math.round(s.health * 50);
-        const toast: RescueToast = {
-          id: `${s.survivor_id}-${Date.now()}`,
-          survivorId: s.survivor_id,
-          severity: s.severity,
-          healthAtRescue: s.health,
-          points: base + bonus,
-          dismissing: false,
-        };
-        setToasts((cur) => [...cur, toast]);
+      } else {
+        // Live mode: defer rescue visuals until drone animation arrives
+        const stepNow = simState.mission_step;
+        setPendingRescues((prev) => {
+          const next = new Map(prev);
+          for (const s of newlyRescued) {
+            if (s.position) {
+              next.set(s.survivor_id, {
+                survivorId: s.survivor_id,
+                position: s.position,
+                severity: s.severity,
+                health: s.health,
+                rescuedAtStep: stepNow,
+              });
+            }
+          }
+          return next;
+        });
+        // Safety timeout: force-fire if not resolved within 5s
+        const ids = newlyRescued.map((s) => s.survivor_id);
         setTimeout(() => {
-          setToasts((cur) => cur.map((t) => t.id === toast.id ? { ...t, dismissing: true } : t));
-          setTimeout(() => setToasts((cur) => cur.filter((t) => t.id !== toast.id)), 320);
-        }, 3000);
+          for (const id of ids) {
+            if (pendingRescuesRef.current.has(id)) {
+              handleRescueArrived(id);
+            }
+          }
+        }, 5000);
       }
     }
 
@@ -191,7 +271,21 @@ export default function Page() {
         api.getState().then(setSimState).catch(() => {});
       },
       onWarning: (warning) => {
+        const warnKey = `${warning.type}-${warning.step}`;
         setActiveWarnings((prev) => [...prev, warning]);
+        // Auto-dismiss after ~6s: mark as dismissing (triggers slide-out), then remove
+        setTimeout(() => {
+          setActiveWarnings((prev) =>
+            prev.map((w) =>
+              `${w.type}-${w.step}` === warnKey ? { ...w, dismissing: true } : w
+            )
+          );
+          setTimeout(() => {
+            setActiveWarnings((prev) =>
+              prev.filter((w) => `${w.type}-${w.step}` !== warnKey)
+            );
+          }, 500);
+        }, 5500);
       },
       onMissionComplete: (data) => {
         setMissionComplete(true);
@@ -271,6 +365,8 @@ export default function Page() {
       setGameScore({ total: 0, livesSaved: 0, streak: 0, lastRescueStep: null });
       setNewlyFoundIds(new Set());
       setRescueBursts(new Map());
+      setPendingRescues(new Map());
+      pendingRescuesRef.current = new Map();
       setActiveWarnings([]);
       prevSurvivorsRef.current = new Map();
       setVisibleLessons(0);
@@ -330,6 +426,8 @@ export default function Page() {
           newlyFoundIds={newlyFoundIds}
           rescueBursts={rescueBursts}
           activeWarnings={activeWarnings}
+          pendingRescues={pendingRescues}
+          onRescueArrived={handleRescueArrived}
         />
 
         <ReasoningLog logs={displayLogs} voiceEnabled={voiceEnabled} />

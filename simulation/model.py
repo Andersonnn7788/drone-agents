@@ -37,11 +37,15 @@ class DisasterModel(mesa.Model):
         self.state_history = []
         self.scanned_cells = set()
         self.disaster_events = []
+        self._narrated_disaster_count = 0
         self.agent_logs = []
         self.narrated_first_calls = set()  # Track first-time narrative emissions
         self.blackout_zones = []
         self.warning_events = []       # List of warning dicts
         self.pending_disasters = []    # Scheduled disasters to fire next step
+
+        # Expected total survivors (may spawn in waves during demo)
+        self.expected_survivors = num_survivors
 
         # Scoring engine
         self.mission_score = 0
@@ -51,8 +55,9 @@ class DisasterModel(mesa.Model):
         # Create drones at base
         drone_names = ["drone_alpha", "drone_bravo", "drone_charlie", "drone_delta", "drone_echo"]
         self.drones = {}
+        initial_battery = 70 if demo_mode else 100
         for name in drone_names[:num_drones]:
-            drone = DroneAgent(self, name)
+            drone = DroneAgent(self, name, initial_battery=initial_battery)
             self.drones[name] = drone
             self.grid.place_agent(drone, BASE_POS)
             drone.pos = BASE_POS  # Explicit set for Mesa 3 compatibility
@@ -90,26 +95,57 @@ class DisasterModel(mesa.Model):
 
     def _place_demo_survivors(self, num_survivors):
         """Place survivors in 3 waves for staggered discovery during demo.
-        Wave 1 (steps 2-3): near base. Wave 2 (steps 5-7): mid-distance.
-        Wave 3 (steps 9-11): far, post-blackout drama."""
+        Wave 1 (init): 2 survivors near base — found/rescued steps 2-4.
+        Wave 2 (step 6): 2 survivors spawned when blackout clears — rescued steps 8-10.
+        Wave 3 (step 11): 1 final survivor — found ~13, rescued ~14.
+        """
         self.survivors = []
-        demo_placements = [
-            # Wave 1: Near base, found early — shows scan-rescue loop
-            ((4, 4), "CRITICAL"),     # SW buildings, ~3 cells from base
+        self.expected_survivors = num_survivors  # override with actual total
 
-            # Wave 2: Mid-distance, around aftershock/blackout events
-            ((9, 3), "MODERATE"),     # SE buildings, ~6 from base
-            ((2, 9), "CRITICAL"),     # NW buildings, ~8 from base — urgent triage
-
-            # Wave 3: Far, post-blackout + rising water drama
-            ((9, 9), "MODERATE"),     # NE buildings — inside blackout zone (center 8,8 r=3)
-            ((8, 9), "STABLE"),       # NE buildings — inside blackout zone (Manhattan from (8,8)=1)
+        # Wave 1: Place 2 survivors at init
+        wave1 = [
+            ((3, 3), "CRITICAL"),     # SW buildings, close to base
+            ((9, 3), "MODERATE"),     # SE buildings, mid-distance
         ]
-        for i, ((x, y), severity) in enumerate(demo_placements[:num_survivors]):
+        for i, ((x, y), severity) in enumerate(wave1):
             survivor = SurvivorAgent(self, severity)
             survivor.survivor_number = i + 1
             self.survivors.append(survivor)
             self.grid.place_agent(survivor, (x, y))
+
+        # Store later waves for spawning during scripted events
+        self._demo_waves = {
+            6: [  # Wave 2: spawns when blackout clears
+                ((2, 10), "CRITICAL"),   # NW buildings, urgent triage
+                ((9, 9), "MODERATE"),    # NE buildings, post-blackout area
+            ],
+            11: [  # Wave 3: final survivor
+                ((1, 1), "STABLE"),      # Far corner, weak signal
+            ],
+        }
+
+    def _spawn_survivor(self, pos, severity, message=None):
+        """Spawn a new survivor mid-mission (used for delayed demo waves)."""
+        x, y = pos
+        idx = len(self.survivors) + 1
+        survivor = SurvivorAgent(self, severity)
+        survivor.survivor_number = idx
+        survivor.found = True
+        self.survivors.append(survivor)
+        self.grid.place_agent(survivor, (x, y))
+
+        # Boost heatmap at spawn location so agent notices it
+        self.heatmap[y][x] = max(self.heatmap[y][x], 0.8)
+
+        # Emit a disaster event so the agent gets alerted
+        msg = message or f"{severity} survivor signal detected near ({x},{y})!"
+        self.disaster_events.append({
+            "type": "survivor_detected",
+            "step": self.mission_step,
+            "position": [x, y],
+            "severity": severity,
+            "message": msg,
+        })
 
     # ── Terrain ───────────────────────────────────────────────────────
 
@@ -155,10 +191,9 @@ class DisasterModel(mesa.Model):
 
     # ── Heatmap update ────────────────────────────────────────────────
 
-    def update_heatmap(self, scan_pos, found_survivors):
+    def update_heatmap(self, scan_pos, found_survivors, scan_radius=2):
         """Bayesian update of heatmap after a scan."""
         x, y = scan_pos
-        scan_radius = 1
 
         if found_survivors:
             for dx in range(-scan_radius, scan_radius + 1):
@@ -188,7 +223,8 @@ class DisasterModel(mesa.Model):
                 drone.battery -= 1
                 if drone.battery <= 0:
                     drone.battery = 0
-                    drone.status = "dead"
+                    if drone.status != "returning":
+                        drone.status = "dead"
 
         # 2. Decay pheromones
         self.pheromone_scanned *= 0.9
@@ -219,6 +255,13 @@ class DisasterModel(mesa.Model):
         # 7. Re-apply active blackout zones
         for zone in self.blackout_zones:
             apply_blackout(self.drones, zone["center"], zone["radius"])
+        # Filter mesh: remove edges involving disconnected drones
+        disconnected = {d.drone_id for d in self.drones.values() if not d.connected}
+        self.mesh_topology = {
+            node: [n for n in neighbors if n not in disconnected]
+            for node, neighbors in self.mesh_topology.items()
+            if node not in disconnected
+        }
 
         # 8. Record state snapshot
         self.state_history.append(self.get_state())
@@ -386,7 +429,7 @@ class DisasterModel(mesa.Model):
 
         # Step 4: _process_pending_disasters() fires the blackout
 
-        # Step 6: Blackout clears + emit rising water warning for (10,7)
+        # Step 6: Blackout clears + spawn Wave 2 + emit rising water warning for (10,7)
         elif step == 6:
             if self.blackout_zones:
                 self.blackout_zones.clear()
@@ -397,6 +440,14 @@ class DisasterModel(mesa.Model):
                     "step": step,
                     "message": "Communication blackout has lifted. All drones reconnected.",
                 })
+
+            # Spawn Wave 2 survivors
+            wave2 = getattr(self, '_demo_waves', {}).get(6, [])
+            for pos, severity in wave2:
+                self._spawn_survivor(
+                    pos, severity,
+                    f"New distress signal! {severity} survivor detected near ({pos[0]},{pos[1]})!",
+                )
 
             pending = {
                 "type": "rising_water",
@@ -414,6 +465,35 @@ class DisasterModel(mesa.Model):
             })
 
         # Step 7: _process_pending_disasters() fires the rising water
+
+        # Step 9: Aftershock #2 warning at (4,2), schedule for step 10
+        elif step == 9:
+            pending = {
+                "type": "aftershock",
+                "fire_at_step": 10,
+                "center": (4, 2),
+            }
+            self.pending_disasters.append(pending)
+            self.warning_events.append({
+                "type": "aftershock_warning",
+                "step": step,
+                "estimated_center": [4, 2],
+                "message": "Seismic activity detected — second aftershock imminent near (4,2)!",
+                "resolved": False,
+                "pending_id": id(pending),
+            })
+
+        # Step 10: _process_pending_disasters() fires aftershock #2
+
+        # Step 11: Spawn Wave 3 — final survivor
+        elif step == 11:
+            wave3 = getattr(self, '_demo_waves', {}).get(11, [])
+            for pos, severity in wave3:
+                self._spawn_survivor(
+                    pos, severity,
+                    f"Weak rescue signal detected near ({pos[0]},{pos[1]})! "
+                    f"A {severity} survivor may be trapped under rubble.",
+                )
 
     # ── Digital twin / mission simulation ─────────────────────────────
 
@@ -512,6 +592,16 @@ class DisasterModel(mesa.Model):
         """Full JSON-serializable state snapshot."""
         # Recompute mesh so SSE always pushes fresh topology
         self.mesh_topology = compute_mesh_topology(self.drones, BASE_POS)
+        # Re-apply active blackout zones so disconnected drones are excluded
+        for zone in self.blackout_zones:
+            apply_blackout(self.drones, zone["center"], zone["radius"])
+        # Filter mesh: remove edges involving disconnected drones
+        disconnected = {d.drone_id for d in self.drones.values() if not d.connected}
+        self.mesh_topology = {
+            node: [n for n in neighbors if n not in disconnected]
+            for node, neighbors in self.mesh_topology.items()
+            if node not in disconnected
+        }
         # Only include found or rescued survivors (fog of war)
         known_survivors = []
         for s in self.survivors:
@@ -526,8 +616,8 @@ class DisasterModel(mesa.Model):
                     "alive": s.alive,
                 })
 
-        # Stats
-        total_survivors = len(self.survivors)
+        # Stats — use expected_survivors so UI shows "2/5 rescued" not "2/2"
+        total_survivors = getattr(self, 'expected_survivors', len(self.survivors))
         found_count = sum(1 for s in self.survivors if s.found)
         alive_count = sum(1 for s in self.survivors if s.alive)
         rescued_count = sum(1 for s in self.survivors if s.rescued)

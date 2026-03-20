@@ -73,7 +73,7 @@ async def _sse_generator():
     last_log_count = len(model.agent_logs)
 
     while True:
-        await asyncio.sleep(0.15)
+        await asyncio.sleep(0.10)
         model = get_model()
 
         # Check for drone position changes (move_to before advance_simulation)
@@ -83,7 +83,7 @@ async def _sse_generator():
             last_drone_hash = drone_hash
 
         # Check for survivor state changes (found/rescued/alive from MCP tools)
-        survivor_hash = str([(s.unique_id, s.found, s.rescued, s.alive) for s in model.survivors])
+        survivor_hash = str([(s.unique_id, s.found, s.rescued, s.alive, round(s.health, 1)) for s in model.survivors])
         survivor_changed = survivor_hash != last_survivor_hash
         if survivor_changed:
             last_survivor_hash = survivor_hash

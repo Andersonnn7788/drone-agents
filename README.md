@@ -27,7 +27,7 @@ The entire system is observable through a real-time Next.js dashboard with grid 
 | **Tier 1 — LLM Commander** (Strategic) | Sector assignments, triage reasoning, digital twin planning, pheromone map analysis, swarm coordination, mid-mission reflection, cross-mission adaptive learning | Communicates via MCP tool calls over Streamable HTTP |
 | **Tier 2 — Drone Local Autonomy** (Tactical) | Continue scanning, auto-return at low battery, pheromone gradient navigation, mesh relay, buffer findings | Operates independently during blackouts — MCP tools reject commands to disconnected drones, enforcing true autonomous operation |
 
-During a communication blackout, drones seamlessly switch to autonomous mode: following pheromone gradients (`score = survivor_nearby - 0.5*scanned - 2.0*danger`), auto-returning when battery drops below 15%, and buffering discoveries until connectivity is restored.
+During a communication blackout, drones seamlessly switch to autonomous mode: following pheromone gradients (`score = survivor_nearby - 1.5*scanned - 2.0*danger + 0.5*heatmap`), auto-returning when battery drops below 15%, and buffering discoveries until connectivity is restored.
 
 ---
 
@@ -52,6 +52,10 @@ flowchart TB
         START["/api/start (POST)"]
         STEP["/api/step (POST)"]
         BLACKOUT_EP["/api/blackout (POST)"]
+        SCORE["/api/score (REST)"]
+        LESSONS["/api/lessons (REST)"]
+        HEALTH["/api/health (REST)"]
+        RESET["/api/reset (POST)"]
     end
 
     subgraph Agent["LangGraph Agent"]
@@ -131,7 +135,7 @@ flowchart TB
     BLACKOUT["Communication<br>Blackout"] -.->|"severs link"| TC
     BLACKOUT -.->|"activates"| Tier2
 
-    PG -->|"score = survivor_nearby<br>- 0.5*scanned<br>- 2.0*danger"| NAV[Navigation Decision]
+    PG -->|"score = survivor_nearby<br>- 1.5*scanned<br>- 2.0*danger<br>+ 0.5*heatmap"| NAV[Navigation Decision]
 ```
 
 ### Mission Step Lifecycle
@@ -173,7 +177,7 @@ flowchart TB
     subgraph Layers["Three Pheromone PropertyLayers"]
         subgraph Scanned["scanned (repulsive)"]
             S_DEP["Deposit: drone completes scan"]
-            S_EFF["Effect: -0.5 weight<br>(drones avoid re-scanning)"]
+            S_EFF["Effect: -1.5 weight<br>(drones avoid re-scanning)"]
         end
         subgraph Survivor["survivor_nearby (attractive)"]
             SN_DEP["Deposit: survivor detected<br>(boosts cell + neighbors)"]
@@ -192,7 +196,7 @@ flowchart TB
     Danger --> DECAY
 
     subgraph Navigation["Drone Navigation Score"]
-        FORMULA["score = survivor_nearby<br>        - 0.5 * scanned<br>        - 2.0 * danger"]
+        FORMULA["score = survivor_nearby<br>        - 1.5 * scanned<br>        - 2.0 * danger<br>        + 0.5 * heatmap"]
         BEST["Move to neighbor<br>with highest score"]
     end
 
@@ -267,9 +271,9 @@ flowchart TB
 
     subgraph Resilience["Network Resilience Analysis"]
         R1[Connectivity ratio]
-        R2[Average path length]
-        R3[Isolated drone count]
-        R4[Relay coverage]
+        R2[Critical nodes]
+        R3[Coverage gaps]
+        R4[Relay suggestions]
     end
 
     RECOMPUTE --> Resilience
@@ -453,6 +457,9 @@ Create a `.env` file in the project root:
 OPENAI_API_KEY=sk-xxxxx
 MCP_SERVER_URL=http://localhost:8000/mcp
 API_BRIDGE_URL=http://localhost:8001
+DEMO_MODE=1
+MSG_WINDOW_SIZE=20
+LLM_MAX_TOKENS=16384
 ```
 
 ### Start All Services
@@ -500,6 +507,62 @@ python scripts/demo.py
 
 The demo pauses between acts for live narration. Open the dashboard at `http://localhost:3000` to watch in real-time.
 
+### How the Demo Flows
+
+1. **Discovery (Steps 0–2):** The user hits `POST /api/start`. The LLM Commander calls `discover_drones()` and `coordinate_swarm()` to survey available drones, then dispatches them to quadrant sectors via `move_to()`. The dashboard begins streaming live positions over SSE.
+
+2. **The Living Disaster (Steps 1–4):** Drones spread out and run `thermal_scan()` to locate survivors. At step 1, a seismic warning fires; at step 2, an aftershock strikes near (5,4), converting cells to DEBRIS and depositing danger pheromones. The agent triages and begins `rescue_survivor()` calls for critical cases.
+
+3. **Communication Crisis (Steps 3–6):** A blackout warning arrives at step 3. At step 4, a communication blackout hits zone (8,8) with radius 3 — drones in range lose contact and switch to autonomous pheromone-guided navigation. The dashboard overlays the blackout zone. Disconnected drones buffer any findings locally.
+
+4. **Race Against Time (Steps 6–11):** The blackout clears at step 6 and Wave 2 survivors spawn. The agent calls `sync_findings()` to recover buffered data from previously disconnected drones. At step 7, rising water floods cells near (10,7). A second aftershock warning fires at step 9, striking at step 10. The agent must balance dwindling battery against survivor health decay, making tough triage calls. A mid-mission reflection checkpoint triggers adaptive learning.
+
+5. **Mission Complete (Steps 11–15):** Wave 3 survivors spawn at step 11. The agent executes final rescues, recalls low-battery drones to base, computes a mission score (Grade A–F), and extracts 3–5 tactical lessons for future runs. The dashboard emits `mission_complete` via SSE and the full timeline replay becomes available.
+
+### End-to-End Demo Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Agent as LLM Commander
+    participant Sim as Mesa Simulation
+    participant UI as Dashboard :3000
+
+    Note over User,UI: Act 1 — Discovery (Steps 0-2)
+    User->>Agent: POST /api/start
+    Agent->>Sim: discover_drones(), coordinate_swarm()
+    Agent->>Sim: move_to() × 4 drones to sectors
+    Sim-->>UI: SSE: state (drone positions)
+
+    Note over User,UI: Act 2 — The Living Disaster (Steps 2-6)
+    Agent->>Sim: thermal_scan() → survivors found
+    Sim-->>Agent: Aftershock warning (step 1)
+    Sim->>Sim: Aftershock fires (step 2) — DEBRIS
+    Agent->>Sim: rescue_survivor() for critical cases
+    Sim-->>UI: SSE: disaster, state updates
+
+    Note over User,UI: Act 3 — Communication Crisis (Steps 4-6)
+    Sim->>Sim: Blackout at (8,8) r=3 (step 4)
+    Sim-->>Agent: Drones disconnected
+    Sim->>Sim: Drones navigate via pheromones autonomously
+    Sim-->>UI: SSE: blackout zone overlay
+
+    Note over User,UI: Act 4 — Race Against Time (Steps 6-11)
+    Sim->>Sim: Blackout clears (step 6) + Wave 2 survivors spawn
+    Agent->>Sim: sync_findings() → recover buffered data
+    Sim->>Sim: Rising water (step 7) — cells flood
+    Agent->>Sim: Triage + rescue under battery pressure
+    Agent->>Agent: Mid-mission reflection checkpoint
+
+    Note over User,UI: Act 5 — Mission Complete (Steps 11-15)
+    Sim->>Sim: Wave 3 survivor spawns (step 11)
+    Agent->>Sim: Final rescues + recall low-battery drones
+    Agent->>Agent: compute_score() → Grade A-F
+    Agent->>Agent: Extract 3-5 tactical lessons
+    Sim-->>UI: SSE: mission_complete
+    UI->>UI: Timeline replay available
+```
+
 ---
 
 ## API Endpoints
@@ -516,6 +579,8 @@ The demo pauses between acts for live narration. Open the dashboard at `http://l
 | POST | `/api/blackout` | Trigger blackout event `{zone_x, zone_y, radius}` |
 | GET | `/api/score` | Current mission score breakdown (grade, rescue/speed/coverage/efficiency/death penalty) |
 | GET | `/api/lessons` | Accumulated tactical lessons from past missions |
+| GET | `/api/health` | Health check with mission status |
+| POST | `/api/reset` | Reset simulation to fresh state |
 
 ---
 

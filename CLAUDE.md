@@ -40,7 +40,7 @@ LangGraph  MCP Server (FastMCP, :8000/mcp)
 ### Two-Tier Intelligence
 
 - **Tier 1 — LLM Commander (Strategic):** Sector assignments, triage reasoning, digital twin planning, pheromone map analysis, swarm coordination. Communicates via MCP tool calls.
-- **Tier 2 — Drone Local Autonomy (Tactical):** During blackout/no orders: continue scanning assigned sector, auto-return at battery < 15%, follow pheromone gradients (`score = survivor_nearby - 0.5*scanned - 2.0*danger`), attempt mesh relay, buffer findings.
+- **Tier 2 — Drone Local Autonomy (Tactical):** During blackout/no orders: continue scanning assigned sector, auto-return at battery < 15%, follow pheromone gradients (`score = survivor_nearby - 1.5*scanned - 2.0*danger + 0.5*heatmap`), attempt mesh relay, buffer findings.
 
 ## Directory Structure
 

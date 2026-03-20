@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   BlackoutZone,
   DroneState,
+  PendingRescue,
   SimState,
   SurvivorState,
   TerrainType,
@@ -90,9 +91,11 @@ interface GridMapProps {
   newlyFoundIds?: Set<number>;
   rescueBursts?: Map<number, [number, number]>;
   activeWarnings?: WarningEvent[];
+  pendingRescues?: Map<number, PendingRescue>;
+  onRescueArrived?: (survivorId: number) => void;
 }
 
-export default function GridMap({ state, gridEffect, isReplaying, newlyFoundIds, rescueBursts, activeWarnings }: GridMapProps) {
+export default function GridMap({ state, gridEffect, isReplaying, newlyFoundIds, rescueBursts, activeWarnings, pendingRescues, onRescueArrived }: GridMapProps) {
   // Build O(1) lookup maps from state
   const survivorsByPos = useMemo<Map<string, SurvivorState[]>>(() => {
     const map = new Map<string, SurvivorState[]>();
@@ -153,6 +156,12 @@ export default function GridMap({ state, gridEffect, isReplaying, newlyFoundIds,
   const moveQueues = useRef<Record<string, [number, number][]>>({});
   const [renderTick, setRenderTick] = useState(0);
 
+  // Refs for pending rescue arrival detection (avoid stale closures in setInterval)
+  const pendingRescuesRef = useRef(pendingRescues);
+  pendingRescuesRef.current = pendingRescues;
+  const onRescueArrivedRef = useRef(onRescueArrived);
+  onRescueArrivedRef.current = onRescueArrived;
+
   // Observe the wrapper to compute square size = min(wrapperWidth, wrapperHeight)
   useEffect(() => {
     const el = wrapperRef.current;
@@ -207,19 +216,29 @@ export default function GridMap({ state, gridEffect, isReplaying, newlyFoundIds,
     }
   }, [state, isReplaying]);
 
-  // Animation loop — pop one waypoint per drone every 200ms
+  // Animation loop — pop one waypoint per drone every 300ms + detect rescue arrivals
   useEffect(() => {
     if (isReplaying) return;
     const interval = setInterval(() => {
       let advanced = false;
       const queues = moveQueues.current;
+      const pendingMap = pendingRescuesRef.current;
+      const arrivedCb = onRescueArrivedRef.current;
       for (const droneId of Object.keys(queues)) {
         const queue = queues[droneId];
         if (!queue || queue.length === 0) continue;
-        // Drain excess queue: if >3 pending, skip to last 2 (record skipped in trail)
-        if (queue.length > 3) {
-          const skipped = queue.splice(0, queue.length - 2);
+        // Drain excess queue: if >8 pending, skip to last 4 (record skipped in trail)
+        if (queue.length > 8) {
+          const skipped = queue.splice(0, queue.length - 4);
           for (const pos of skipped) {
+            // Fire pending rescue if drone passes through survivor cell
+            if (pendingMap && pendingMap.size > 0 && arrivedCb) {
+              for (const [survivorId, rescue] of Array.from(pendingMap.entries())) {
+                if (pos[0] === rescue.position[0] && pos[1] === rescue.position[1]) {
+                  arrivedCb(survivorId);
+                }
+              }
+            }
             const hist = droneHistories.current[droneId] ?? [];
             const last = hist[hist.length - 1];
             if (!last || last[0] !== pos[0] || last[1] !== pos[1]) {
@@ -237,8 +256,20 @@ export default function GridMap({ state, gridEffect, isReplaying, newlyFoundIds,
         }
         advanced = true;
       }
+      // Check if any drone's display position matches a pending rescue
+      if (pendingMap && pendingMap.size > 0 && arrivedCb) {
+        for (const [survivorId, rescue] of Array.from(pendingMap.entries())) {
+          for (const did of Object.keys(displayPositions.current)) {
+            const dp = displayPositions.current[did];
+            if (dp && dp[0] === rescue.position[0] && dp[1] === rescue.position[1]) {
+              arrivedCb(survivorId);
+              break;
+            }
+          }
+        }
+      }
       if (advanced) setRenderTick((t) => t + 1);
-    }, 200);
+    }, 300);
     return () => clearInterval(interval);
   }, [isReplaying]);
 
@@ -257,6 +288,32 @@ export default function GridMap({ state, gridEffect, isReplaying, newlyFoundIds,
       }
     }
     return { floodedCells: flooded, aftershockCells: aftershock };
+  }, [state]);
+
+  // Compute distress signal positions from survivor_detected events
+  // Show only where no found survivor exists yet (avoid doubling up after scan)
+  const distressSignals = useMemo<Map<string, string>>(() => {
+    const signals = new Map<string, string>(); // posKey -> severity
+    if (!state) return signals;
+
+    // Collect found survivor positions
+    const foundPositions = new Set<string>();
+    for (const s of state.survivors) {
+      if (s.position && s.found) {
+        foundPositions.add(`${s.position[0]},${s.position[1]}`);
+      }
+    }
+
+    // Gather survivor_detected events from all steps up to current
+    for (const evt of state.disaster_events) {
+      if (evt.type !== 'survivor_detected' || !evt.position) continue;
+      if (evt.step > state.mission_step) continue;
+      const key = `${evt.position[0]},${evt.position[1]}`;
+      if (!foundPositions.has(key)) {
+        signals.set(key, evt.severity ?? 'STABLE');
+      }
+    }
+    return signals;
   }, [state]);
 
   if (!state) {
@@ -320,6 +377,31 @@ export default function GridMap({ state, gridEffect, isReplaying, newlyFoundIds,
             <div className="absolute inset-0 pointer-events-none warning-zone-pulse" style={{ zIndex: 18 }} />
           )}
 
+          {/* Distress signal overlay — unconfirmed survivor detection */}
+          {distressSignals.has(posKey) && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
+              <div className="distress-signal-pulse" style={{
+                width: '60%',
+                height: '60%',
+                borderRadius: '50%',
+                border: `2px solid ${SEVERITY_COLORS[distressSignals.get(posKey)!] ?? '#f97316'}`,
+                background: `radial-gradient(circle, ${SEVERITY_COLORS[distressSignals.get(posKey)!] ?? '#f97316'}33 0%, transparent 70%)`,
+              }}>
+                <span style={{
+                  position: 'absolute',
+                  top: '50%',
+                  left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  fontSize: 9,
+                  fontWeight: 900,
+                  color: SEVERITY_COLORS[distressSignals.get(posKey)!] ?? '#f97316',
+                  textShadow: '0 0 4px rgba(0,0,0,0.8)',
+                  lineHeight: 1,
+                }}>?</span>
+              </div>
+            </div>
+          )}
+
           {/* Blackout overlay */}
           {inBlackout && (
             <div className="absolute inset-0 bg-purple-950/50 pointer-events-none" />
@@ -355,24 +437,27 @@ export default function GridMap({ state, gridEffect, isReplaying, newlyFoundIds,
         </span>
       </div>
 
-      {/* Warning banners */}
-      {(activeWarnings ?? []).filter((w) => !w.resolved).map((w, i) => (
-        <div
-          key={`${w.type}-${w.step}-${i}`}
-          className="warning-banner-in flex items-center gap-2 px-3 py-1.5 rounded border border-amber-300 bg-amber-50 flex-shrink-0 mb-1"
-        >
-          <span className="warning-icon-shake text-amber-600 text-sm font-bold">&#9888;</span>
-          <span className="text-xs font-semibold text-amber-800 flex-1">{w.message}</span>
-          <span className="text-[9px] text-amber-500 font-mono">
-            ({w.estimated_center[0]},{w.estimated_center[1]})
-          </span>
+      <div className="relative flex-1 min-h-0">
+        {/* Warning banners — absolute overlay, no layout shift */}
+        <div className="absolute top-0 left-0 right-0 z-30 flex flex-col gap-1 p-1 pointer-events-none">
+          {(activeWarnings ?? []).filter((w) => !w.resolved).map((w, i) => (
+            <div
+              key={`${w.type}-${w.step}-${i}`}
+              className={`${w.dismissing ? 'warning-banner-out' : 'warning-banner-blink'} flex items-center gap-2 px-3 py-1.5 rounded border border-amber-300 bg-amber-50 pointer-events-auto`}
+            >
+              <span className="warning-icon-shake text-amber-600 text-sm font-bold">&#9888;</span>
+              <span className="text-xs font-semibold text-amber-800 flex-1">{w.message}</span>
+              <span className="text-[9px] text-amber-500 font-mono">
+                ({w.estimated_center[0]},{w.estimated_center[1]})
+              </span>
+            </div>
+          ))}
         </div>
-      ))}
 
-      <div
-        ref={wrapperRef}
-        className={`flex-1 min-h-0 flex items-center justify-center overflow-hidden ${gridEffect === 'aftershock' ? 'aftershock-shake' : ''}`}
-      >
+        <div
+          ref={wrapperRef}
+          className={`w-full h-full flex items-center justify-center overflow-hidden ${gridEffect === 'aftershock' ? 'aftershock-shake' : ''}`}
+        >
         <div
           ref={gridRef}
           className="relative flex-shrink-0"
@@ -438,7 +523,7 @@ export default function GridMap({ state, gridEffect, isReplaying, newlyFoundIds,
                 height: '100%',
                 pointerEvents: 'none',
                 overflow: 'visible',
-                zIndex: 7,
+                zIndex: 20,
               }}
             >
               {(() => {
@@ -453,11 +538,15 @@ export default function GridMap({ state, gridEffect, isReplaying, newlyFoundIds,
                     if (drawn.has(edgeKey)) continue;
                     drawn.add(edgeKey);
 
-                    // Resolve positions
+                    // Resolve positions — use animated positions in live mode
                     const posOf = (id: string): [number, number] | null => {
                       if (id === 'base') return basePos as [number, number];
                       const d = state.drones[id];
-                      return d ? d.position : null;
+                      if (!d || !d.connected) return null;
+                      if (!isReplaying) {
+                        return displayPositions.current[id] ?? d.position;
+                      }
+                      return d.position;
                     };
                     const p1 = posOf(nodeId);
                     const p2 = posOf(neighborId);
@@ -468,14 +557,25 @@ export default function GridMap({ state, gridEffect, isReplaying, newlyFoundIds,
                     const x2 = p2[0] * cellSize + cellSize / 2;
                     const y2 = (GRID_SIZE - 1 - p2[1]) * cellSize + cellSize / 2;
 
+                    // Glow line (wider, more transparent) behind the main line
+                    lines.push(
+                      <line
+                        key={`${edgeKey}-glow`}
+                        x1={x1} y1={y1} x2={x2} y2={y2}
+                        stroke="#0891b2"
+                        strokeWidth={6}
+                        opacity={0.25}
+                        strokeLinecap="round"
+                      />
+                    );
                     lines.push(
                       <line
                         key={edgeKey}
                         x1={x1} y1={y1} x2={x2} y2={y2}
                         stroke="#0891b2"
-                        strokeWidth={1.5}
+                        strokeWidth={2}
                         strokeDasharray="4 3"
-                        opacity={0.6}
+                        opacity={0.8}
                         strokeLinecap="round"
                       />
                     );
@@ -537,7 +637,7 @@ export default function GridMap({ state, gridEffect, isReplaying, newlyFoundIds,
                     top,
                     width: MARKER,
                     height: MARKER,
-                    transition: 'left 0.2s ease-in-out, top 0.2s ease-in-out',
+                    transition: 'left 0.3s ease-in-out, top 0.3s ease-in-out',
                     borderRadius: '50%',
                     background: `radial-gradient(circle at 38% 32%, ${droneColor}dd, ${droneColor}88)`,
                     border: d.is_relay
@@ -588,11 +688,11 @@ export default function GridMap({ state, gridEffect, isReplaying, newlyFoundIds,
             const cellSize = gridSize.width / GRID_SIZE;
             const S_MARKER = 16;
 
-            // Group by cell for offset logic — exclude rescued survivors
+            // Group by cell for offset logic — exclude rescued survivors (unless pending)
             const survivorsByCell = new Map<string, number>();
             const survivorIndex = new Map<number, number>();
             for (const s of state.survivors) {
-              if (!s.position || s.rescued) continue;
+              if (!s.position || (s.rescued && !(pendingRescues?.has(s.survivor_id)))) continue;
               const key = `${s.position[0]},${s.position[1]}`;
               const count = survivorsByCell.get(key) ?? 0;
               survivorIndex.set(s.survivor_id, count);
@@ -606,7 +706,8 @@ export default function GridMap({ state, gridEffect, isReplaying, newlyFoundIds,
               const isNewlyFound = newlyFoundIds?.has(s.survivor_id) ?? false;
 
               // Rescued survivors: show muted ✓ marker (burst overlay handled separately)
-              if (s.rescued) {
+              // If rescue is pending (drone hasn't visually arrived), keep showing as active
+              if (s.rescued && !(pendingRescues?.has(s.survivor_id))) {
                 if (rescueBursts?.has(s.survivor_id)) return null; // burst is showing
                 const left = s.position[0] * cellSize + cellSize / 2 - S_MARKER / 2;
                 const top  = (GRID_SIZE - 1 - s.position[1]) * cellSize + cellSize / 2 - S_MARKER / 2;
@@ -776,6 +877,7 @@ export default function GridMap({ state, gridEffect, isReplaying, newlyFoundIds,
           })}
         </div>
       </div>
+      </div>
 
       {/* Legend */}
       <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5 flex-shrink-0">
@@ -796,6 +898,10 @@ export default function GridMap({ state, gridEffect, isReplaying, newlyFoundIds,
         <span className="flex items-center gap-1 text-[9px] text-gray-500">
           <span className="inline-block w-2 h-2 rounded-sm" style={{ background: 'rgba(245,158,11,0.5)' }} />
           Warning
+        </span>
+        <span className="flex items-center gap-1 text-[9px] text-gray-500">
+          <span className="inline-block w-2 h-2 rounded-full" style={{ border: '1.5px solid #f97316', background: 'rgba(249,115,22,0.2)' }} />
+          Distress
         </span>
         <span className="flex items-center gap-1 text-[9px] text-gray-500">
           <span className="inline-block w-4 h-0 border-t-2 border-dashed" style={{ borderColor: '#0891b2' }} />

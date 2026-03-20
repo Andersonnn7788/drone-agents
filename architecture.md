@@ -27,6 +27,8 @@ flowchart TB
         BLACKOUT_EP["/api/blackout (POST)"]
         HEALTH["/api/health (GET)"]
         RESET["/api/reset (POST)"]
+        SCORE_EP["/api/score (GET)"]
+        LESSONS_EP["/api/lessons (GET)"]
     end
 
     subgraph Agent["LangGraph Agent"]
@@ -89,7 +91,7 @@ flowchart TB
 
     subgraph Tier2["Tier 2 — Drone Local Autonomy (Tactical)"]
         CS[Continue Scanning Sector]
-        AR["Auto-Return<br>(battery < 15%)"]
+        AR["Auto-Return<br>(battery < max(3×dist+15, 35))"]
         PG["Pheromone Gradient<br>Navigation"]
         MR[Mesh Relay Attempt]
         BF[Buffer Findings]
@@ -110,7 +112,7 @@ flowchart TB
     BLACKOUT["Communication<br>Blackout"] -.->|"severs link"| TC
     BLACKOUT -.->|"activates"| Tier2
 
-    PG -->|"score = survivor_nearby<br>- 0.5*scanned<br>- 2.0*danger"| NAV[Navigation Decision]
+    PG -->|"score = survivor_nearby<br>- 1.5*scanned<br>- 2.0*danger<br>+ 0.5*heatmap"| NAV[Navigation Decision]
 ```
 
 ---
@@ -205,7 +207,7 @@ Drone lifecycle states and transitions.
 stateDiagram-v2
     [*] --> Active: Mission Start
 
-    Active --> Returning: battery < 15%
+    Active --> Returning: battery < max(3*dist+15, 35)
     Active --> Relay: deploy_as_relay()
     Active --> Autonomous: blackout / disconnected
     Active --> Scanning: thermal_scan()
@@ -213,7 +215,7 @@ stateDiagram-v2
     Scanning --> Active: scan complete
 
     Autonomous --> Active: connection restored
-    Autonomous --> Returning: battery < 15%
+    Autonomous --> Returning: battery < max(3*dist+15, 35)
 
     Returning --> Charging: reached base (6,5)
 
@@ -255,6 +257,7 @@ sequenceDiagram
     API-->>UI: SSE event: "logs" (agent reasoning)
     API-->>UI: SSE event: "disaster" (if triggered)
     API-->>UI: SSE event: "blackout" (if active)
+    API-->>UI: SSE event: "warning" (if disaster alert)
     API-->>UI: SSE event: "mission_complete" (if finished)
 
     UI->>UI: Render grid, panels, logs
@@ -273,7 +276,7 @@ flowchart TB
 
     subgraph BLACKOUT["Blackout Zone"]
         DISC["Drones in zone:<br>connected = False"]
-        AUTO["Activate Autonomous Mode<br>• Continue sector scan<br>• Follow pheromone gradients<br>• Auto-return if battery < 15%"]
+        AUTO["Activate Autonomous Mode<br>• Continue sector scan<br>• Follow pheromone gradients<br>• Auto-return if battery < max(3×dist+15, 35)"]
         BUFF["Buffer findings locally<br>(findings_buffer)"]
     end
 
@@ -330,6 +333,7 @@ flowchart LR
             RL[ReasoningLog.tsx]
             CP[ControlPanel.tsx]
             TS[TimelineSlider.tsx]
+            RT[RescueToast.tsx]
         end
         SNAP["State Snapshot<br>History (for replay)"]
     end
@@ -346,6 +350,7 @@ flowchart LR
     SSE_GEN -->|"event: logs"| EVS
     SSE_GEN -->|"event: disaster"| EVS
     SSE_GEN -->|"event: blackout"| EVS
+    SSE_GEN -->|"event: warning"| EVS
     SSE_GEN -->|"event: mission_complete"| EVS
 
     REST_EP -->|"HTTP GET (fallback)"| Components
@@ -368,7 +373,7 @@ The agent improves across missions through a closed feedback loop: score, reflec
 ```mermaid
 flowchart LR
     EXEC["Mission Execution<br>(LangGraph agent loop)"] --> SCORE["compute_score()<br>Grade A–F<br>(rescue, speed, coverage,<br>death penalty, efficiency)"]
-    SCORE --> REFLECT["Mid-Mission Reflection<br>(every 5 steps)<br>SystemMessage with score<br>breakdown injected"]
+    SCORE --> REFLECT["Mid-Mission Reflection<br>(every 8 steps if ≤20 max,<br>else every 5)<br>SystemMessage with score<br>breakdown injected"]
     REFLECT --> EXEC
     SCORE --> LESSONS["Post-Mission Lesson<br>Extraction<br>(LLM, temperature=0.3)<br>3–5 tactical lessons"]
     LESSONS --> PERSIST["Persist to<br>lessons_learned.json<br>(max 15 lessons,<br>oldest evicted)"]
@@ -376,7 +381,7 @@ flowchart LR
     PROMPT --> EXEC
 ```
 
-The scoring engine evaluates rescue points, speed bonus, coverage bonus, death penalty, and efficiency bonus to produce a total score and letter grade (A >= 500, B >= 350, C >= 200, D >= 100, F < 100). Mid-mission reflection checkpoints (every 5 steps) inject the current score breakdown as a `SystemMessage`, prompting the agent to evaluate what is working and what should change. After the mission ends, the LLM extracts 3-5 tactical lessons from mission statistics, which are persisted to `logs/lessons_learned.json` (capped at 15, oldest evicted). On the next mission, `build_adaptive_prompt()` appends these lessons to the system prompt, creating a closed loop of continuous improvement.
+The scoring engine evaluates rescue points, speed bonus, coverage bonus, death penalty, and efficiency bonus to produce a total score and letter grade (A >= 500, B >= 350, C >= 200, D >= 100, F < 100). Mid-mission reflection checkpoints (every 8 steps when max_steps ≤ 20, otherwise every 5 steps) inject the current score breakdown as a `SystemMessage`, prompting the agent to evaluate what is working and what should change. After the mission ends, the LLM extracts 3-5 tactical lessons from mission statistics, which are persisted to `logs/lessons_learned.json` (capped at 15, oldest evicted). On the next mission, `build_adaptive_prompt()` appends these lessons to the system prompt, creating a closed loop of continuous improvement.
 
 ---
 
@@ -389,7 +394,7 @@ flowchart TB
     subgraph Layers["Three Pheromone PropertyLayers"]
         subgraph Scanned["scanned (repulsive)"]
             S_DEP["Deposit: drone completes scan"]
-            S_EFF["Effect: -0.5 weight<br>(drones avoid re-scanning)"]
+            S_EFF["Effect: -1.5 weight<br>(drones avoid re-scanning)"]
         end
         subgraph Survivor["survivor_nearby (attractive)"]
             SN_DEP["Deposit: survivor detected<br>(boosts cell + neighbors)"]
@@ -408,13 +413,14 @@ flowchart TB
     Danger --> DECAY
 
     subgraph Navigation["Drone Navigation Score"]
-        FORMULA["score = survivor_nearby<br>        - 0.5 * scanned<br>        - 2.0 * danger"]
+        FORMULA["score = survivor_nearby<br>        - 1.5 * scanned<br>        - 2.0 * danger<br>        + 0.5 * heatmap"]
         BEST["Move to neighbor<br>with highest score"]
     end
 
     S_EFF --> FORMULA
     SN_EFF --> FORMULA
     D_EFF --> FORMULA
+    HM["Bayesian Heatmap<br>(+0.5 weight)"] --> FORMULA
     FORMULA --> BEST
 
     NOTE["Works during blackouts<br>No LLM involvement needed"]
@@ -476,5 +482,5 @@ flowchart TB
 | Idle step | 1 battery |
 | Move | 2 battery |
 | Thermal scan | 3 battery |
-| Auto-return threshold | < 15% battery |
+| Auto-return threshold | `battery < max(3*dist+15, 35)` (distance-aware) |
 | Relay comm range | 6 (vs normal 4) |

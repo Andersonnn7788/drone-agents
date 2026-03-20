@@ -52,7 +52,7 @@ export interface BlackoutZone {
 }
 
 export interface DisasterEvent {
-  type: 'aftershock' | 'rising_water' | 'blackout' | 'blackout_cleared';
+  type: 'aftershock' | 'rising_water' | 'blackout' | 'blackout_cleared' | 'survivor_detected';
   step: number;
   center?: [number, number];
   affected_cells?: [number, number][];
@@ -60,6 +60,8 @@ export interface DisasterEvent {
   flooded_cells?: [number, number][];
   radius?: number;
   affected_drones?: string[];
+  position?: [number, number];
+  severity?: Severity;
 }
 
 export interface WarningEvent {
@@ -68,6 +70,7 @@ export interface WarningEvent {
   estimated_center: [number, number];
   message: string;
   resolved: boolean;
+  dismissing?: boolean;
 }
 
 export interface MissionStats {
@@ -237,6 +240,14 @@ async function post<T>(path: string, body?: unknown): Promise<T> {
 }
 
 // ── Gamification types ────────────────────────────────────────────────────────
+
+export interface PendingRescue {
+  survivorId: number;
+  position: [number, number];
+  severity: Severity;
+  health: number;
+  rescuedAtStep: number;
+}
 
 export interface RescueToast {
   id: string;

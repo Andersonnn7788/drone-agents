@@ -22,6 +22,31 @@ def _get_drone(drone_id: str):
     return drone, None
 
 
+def _check_drone_available(drone) -> dict | None:
+    """Block commands to drones that are charging or returning to base.
+
+    Returns an error dict if the drone is unavailable, None if OK.
+    """
+    if drone.status == "charging":
+        return {
+            "error": (
+                f"Drone '{drone.drone_id}' is CHARGING at base ({drone.battery}% battery). "
+                f"It will be fully charged next step. "
+                f"Wait for it to reach 100% before issuing commands."
+            )
+        }
+    if drone.status == "returning":
+        dist = abs(drone.pos[0] - BASE_POS[0]) + abs(drone.pos[1] - BASE_POS[1])
+        return {
+            "error": (
+                f"Drone '{drone.drone_id}' is RETURNING to base ({drone.battery}% battery, "
+                f"{dist} cells away). It will auto-charge once it arrives. "
+                f"Do not command it until fully recharged."
+            )
+        }
+    return None
+
+
 # ── Core Tools (11) ────────────────────────────────────────────────────
 
 @mcp.tool()
@@ -42,6 +67,9 @@ async def move_to(drone_id: str, x: int, y: int) -> dict:
         return err
     if not drone.connected:
         return {"error": f"Drone '{drone_id}' is disconnected (blackout). Cannot command — it is operating autonomously."}
+    unavail = _check_drone_available(drone)
+    if unavail:
+        return unavail
 
     # Adjacent or same-cell move — use single-step (backward compatible)
     dx_dist = abs(x - drone.pos[0])
@@ -82,7 +110,7 @@ async def move_to(drone_id: str, x: int, y: int) -> dict:
 
 @mcp.tool()
 def thermal_scan(drone_id: str) -> dict:
-    """Perform a thermal scan at the drone's current position (radius 1).
+    """Perform a thermal scan at the drone's current position (radius 2, covers 5x5 = 25 cells).
     Costs 3 battery. Discovers survivors, updates heatmap, deposits pheromones.
     Returns list of newly found survivors with severity and health."""
     drone, err = _get_drone(drone_id)
@@ -90,6 +118,9 @@ def thermal_scan(drone_id: str) -> dict:
         return err
     if not drone.connected:
         return {"error": f"Drone '{drone_id}' is disconnected (blackout). Cannot command — it is operating autonomously."}
+    unavail = _check_drone_available(drone)
+    if unavail:
+        return unavail
     return drone.thermal_scan()
 
 
@@ -173,6 +204,11 @@ def recall_drone(drone_id: str) -> dict:
         return err
     if not drone.connected:
         return {"error": f"Drone '{drone_id}' is disconnected (blackout). Cannot command — it is operating autonomously."}
+    if drone.status == "returning":
+        dist = abs(drone.pos[0] - BASE_POS[0]) + abs(drone.pos[1] - BASE_POS[1])
+        return {"success": True, "drone_id": drone_id, "status": "returning", "note": f"Already returning — {dist} cells from base."}
+    if drone.status == "charging":
+        return {"success": True, "drone_id": drone_id, "status": "charging", "note": f"Already at base charging ({drone.battery}%)."}
     return drone.return_to_base()
 
 
@@ -225,15 +261,24 @@ def get_mission_summary() -> dict:
 
 @mcp.tool()
 def advance_simulation(steps: int = 1) -> dict:
-    """Advance the simulation by N steps. Each step: drains battery, decays pheromones,
-    drains survivor health, runs drone autonomy, checks for aftershocks/floods,
-    and recomputes mesh topology. Returns the new state summary after stepping."""
+    """Advance the simulation by 1 step. Always advances exactly one step.
+    Each step: drains battery, decays pheromones, drains survivor health,
+    runs drone autonomy, checks for aftershocks/floods, and recomputes
+    mesh topology. Call multiple times to advance multiple steps."""
     model = get_model()
-    for _ in range(steps):
-        model.step()
+    max_steps = int(os.environ.get("MAX_MISSION_STEPS", "50"))
+    if model.mission_step >= max_steps:
+        state = model.get_state()
+        return {
+            "steps_advanced": 0,
+            "new_mission_step": state["mission_step"],
+            "stats": state["stats"],
+            "recent_disasters": state["disaster_events"][-3:] if state["disaster_events"] else [],
+        }
+    model.step()
     state = model.get_state()
     return {
-        "steps_advanced": steps,
+        "steps_advanced": 1,
         "new_mission_step": state["mission_step"],
         "stats": state["stats"],
         "recent_disasters": state["disaster_events"][-3:] if state["disaster_events"] else [],
@@ -241,11 +286,10 @@ def advance_simulation(steps: int = 1) -> dict:
 
 
 @mcp.tool()
-def rescue_survivor(drone_id: str, survivor_id: int) -> dict:
-    """Rescue a survivor at the drone's current position.
-    The drone must be on the same cell as the survivor. The survivor must be
-    found (scanned), alive, and not already rescued. Marks the survivor as rescued
-    so their health stops draining. Call this AFTER moving to a found survivor's cell."""
+async def rescue_survivor(drone_id: str, survivor_id: int) -> dict:
+    """Rescue a survivor. Auto-moves the drone to the survivor's cell if needed.
+    The survivor must be found (scanned), alive, and not already rescued.
+    Marks the survivor as rescued so their health stops draining."""
     model = get_model()
     drone, err = _get_drone(drone_id)
     if err:
@@ -259,6 +303,44 @@ def rescue_survivor(drone_id: str, survivor_id: int) -> dict:
             break
     if target is None:
         return {"error": f"Unknown survivor_id {survivor_id}. Check discovered survivors first."}
+
+    # Block charging/returning drones from rescue missions
+    unavail = _check_drone_available(drone)
+    if unavail:
+        return unavail
+
+    # Early checks before attempting auto-move
+    if target.rescued:
+        return {
+            "success": True,
+            "already_rescued": True,
+            "drone_id": drone_id,
+            "survivor_id": survivor_id,
+        }
+    if not target.alive:
+        return {"success": False, "reason": f"Survivor {survivor_id} is already dead."}
+    if target.pos is None:
+        return {"success": False, "reason": f"Survivor {survivor_id} is no longer on the grid."}
+
+    # Disconnected drones can only rescue if already co-located (local physical action)
+    if not drone.connected and drone.pos != target.pos:
+        return {
+            "success": False,
+            "reason": f"Drone {drone_id} is disconnected — cannot command movement. It is navigating autonomously and will rescue on contact.",
+        }
+
+    # Auto-move to survivor if not co-located (only when connected)
+    if drone.pos != target.pos:
+        sx, sy = target.pos
+        move_result = await move_to(drone_id, sx, sy)
+        if not move_result.get("success"):
+            fail_reason = move_result.get("reason") or move_result.get("error") or "move failed"
+            return {
+                "success": False,
+                "reason": f"Could not reach survivor — {fail_reason}",
+                "drone_position": list(drone.pos),
+                "survivor_position": list(target.pos),
+            }
 
     return drone.rescue_survivor(target)
 
