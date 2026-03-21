@@ -31,6 +31,44 @@ During a communication blackout, drones seamlessly switch to autonomous mode: fo
 
 ---
 
+## Adaptive AI: Cloud ↔ Edge
+
+Real disasters don't guarantee internet. Drone Rescuer adapts its AI backbone to whatever connectivity is available — from full cloud reasoning to fully offline edge inference.
+
+### Dual-Mode Intelligence
+
+| Mode | When | LLM Provider | Capability |
+|------|------|-------------|------------|
+| **Connected Mode** (Minor Disaster) | Internet partially available | Cloud LLM (GPT-5 mini via OpenAI) | Maximum reasoning depth, complex triage logic, full chain-of-thought planning |
+| **Edge Mode** (Catastrophic Disaster) | Internet completely severed | Local LLM via Ollama (Llama 3.1, Phi-3, Mistral) | Full agent capabilities — MCP tools, triage reasoning, swarm coordination — all without a single byte leaving the device |
+
+### Three-Layer Resilience
+
+```
+Layer 1: Cloud LLM available     → Full strategic reasoning (GPT-5 mini)
+Layer 2: Cloud down, local LLM   → Edge AI takes command (Ollama)
+Layer 3: All AI down              → Tier 2 drone autonomy (pheromones, auto-return, mesh relay)
+```
+
+No matter how many layers fail, drones keep operating. The system degrades gracefully — never catastrophically.
+
+### Seamless Switchover
+
+LangChain's provider abstraction means switching between cloud and edge is a single environment variable:
+
+```env
+LLM_PROVIDER=openai    # Cloud mode (default)
+LLM_PROVIDER=ollama    # Edge mode (offline)
+```
+
+The system detects connectivity loss and falls back to the local model. Same MCP tools, same triage protocol, same swarm coordination — just a different brain.
+
+### Mesh Network = Zero Cloud
+
+Drone-to-drone communication is entirely peer-to-peer via mesh topology. No cloud relay, no internet dependency. The mesh works identically in both connected and edge modes.
+
+---
+
 ## Architecture
 
 ### System Architecture
@@ -59,7 +97,7 @@ flowchart TB
     end
 
     subgraph Agent["LangGraph Agent"]
-        LLM["GPT-5 mini (LLM)"]
+        LLM["GPT-5 mini (Cloud)<br>/ Ollama (Edge)"]
         SG[StateGraph]
         SP[System Prompt + Triage Protocol]
     end
@@ -309,7 +347,7 @@ flowchart LR
 | Simulation Engine | Mesa 3 (Python) | — |
 | MCP Server | FastMCP (`mcp` SDK, Streamable HTTP) | `localhost:8000/mcp` |
 | Agent Brain | LangChain + LangGraph + `langchain-mcp-adapters` | — |
-| LLM | OpenAI GPT-5 mini (`gpt-5-mini`) via `langchain-openai` | — |
+| LLM | OpenAI GPT-5 mini (cloud) / Ollama (local edge) via LangChain | — |
 | API Bridge | FastAPI (SSE streaming + REST) | `localhost:8001` |
 | Frontend | Next.js 16+ (App Router) + React + TypeScript + Tailwind | `localhost:3000` |
 
@@ -436,13 +474,17 @@ drone-agents/
 
 - Python 3.11+
 - Node.js 18+
-- An OpenAI API key
+- An OpenAI API key (cloud mode) OR [Ollama](https://ollama.com) installed (edge mode)
 
 ### Install Dependencies
 
 ```bash
 # Python (from project root)
 pip install "mcp[cli]" mesa langchain-mcp-adapters langgraph langchain-openai langchain fastapi uvicorn numpy python-dotenv
+
+# For edge/offline mode (optional)
+# Install Ollama: https://ollama.com
+# ollama pull llama3.1
 
 # Frontend
 cd dashboard
@@ -454,7 +496,14 @@ npm install
 Create a `.env` file in the project root:
 
 ```env
+# Cloud Mode (default)
 OPENAI_API_KEY=sk-xxxxx
+LLM_PROVIDER=openai
+
+# Edge Mode (offline — no API key needed)
+# LLM_PROVIDER=ollama
+# OLLAMA_MODEL=llama3.1
+
 MCP_SERVER_URL=http://localhost:8000/mcp
 API_BRIDGE_URL=http://localhost:8001
 DEMO_MODE=1
