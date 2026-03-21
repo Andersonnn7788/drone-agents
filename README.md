@@ -1,6 +1,6 @@
 # Drone Rescuer
 
-Drone Rescuer is a **self-healing rescue drone swarm simulation** where an autonomous AI Command Agent orchestrates a fleet of drones to find survivors in a disaster zone — with zero cloud connectivity. The agent **learns from every mission** (RL-inspired), reflecting mid-run and carrying tactical lessons forward so each deployment is smarter than the last. All communication between the Agent (LLM) and Drones (simulation) flows through **Model Context Protocol (MCP)**.
+Drone Rescuer is a **self-healing rescue drone swarm simulation** where an autonomous AI Command Agent orchestrates a fleet of drones to find survivors in a disaster zone — adapting between cloud AI and fully offline edge inference based on connectivity. The agent **learns from every mission** (RL-inspired), reflecting mid-run and carrying tactical lessons forward so each deployment is smarter than the last. All communication between the Agent (LLM) and Drones (simulation) flows through **Model Context Protocol (MCP)**.
 
 **Hackathon Track:** Agentic AI (Decentralised Swarm Intelligence)
 
